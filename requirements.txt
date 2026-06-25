@@ -5,6 +5,10 @@ chromadb>=0.5
 sentence-transformers>=3.0
 pymupdf4llm>=0.0.10
 
+# PDF OCR con extracción de fórmulas (markdown + LaTeX)
+# Decisión documentada en docs/adr/0001-pdf-loader-marker.md
+marker-pdf>=1.0
+
 # Embeddings — torch se declara explícito para tener control de versión
 # (MPS en Mac Apple Silicon, CUDA en Windows con GPU NVIDIA)
 torch>=2.3
