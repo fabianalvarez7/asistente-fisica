@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asistente de Física 1</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="chat-container">
+    <header class="chat-header">
+      <h1>Asistente de Física 1</h1>
+      <p class="subtitle">Respondemos desde los apuntes del curso</p>
+    </header>
+
+    <ul id="messages" class="messages" aria-live="polite"></ul>
+
+    <form id="chat-form" class="input-area">
+      <input
+        id="query"
+        type="text"
+        name="query"
+        autocomplete="off"
+        maxlength="500"
+        placeholder="Escribí tu pregunta de Física 1..."
+        aria-label="Pregunta"
+      />
+      <button type="submit" id="send-btn">Enviar</button>
+    </form>
+
+    <div id="hint" class="hint" role="status" aria-live="assertive"></div>
+  </main>
+
+  <script src="/chat.js"></script>
+</body>
+</html>

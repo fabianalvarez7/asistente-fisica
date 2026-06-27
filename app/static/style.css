@@ -1,0 +1,136 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #f5f5f5;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+.chat-container {
+  max-width: 720px;
+  margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.chat-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fafafa;
+}
+
+.chat-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f4c81;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message {
+  display: flex;
+}
+
+.message.user {
+  justify-content: flex-end;
+}
+
+.message.assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 80%;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.user .bubble {
+  background-color: #0f4c81;
+  color: #fff;
+  border-bottom-right-radius: 0.25rem;
+}
+
+.message.assistant .bubble {
+  background-color: #eef2f7;
+  color: #1a1a1a;
+  border-bottom-left-radius: 0.25rem;
+}
+
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e0e0e0;
+  background-color: #fafafa;
+}
+
+.input-area input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+}
+
+.input-area input:focus {
+  outline: 2px solid #0f4c81;
+  border-color: #0f4c81;
+}
+
+.input-area input:disabled {
+  background-color: #eee;
+  cursor: not-allowed;
+}
+
+.input-area button {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  background-color: #0f4c81;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.input-area button:disabled {
+  background-color: #7a9bbd;
+  cursor: not-allowed;
+}
+
+.hint {
+  min-height: 1.5rem;
+  padding: 0 1.25rem 0.75rem;
+  font-size: 0.875rem;
+  color: #b00020;
+  background-color: #fafafa;
+}
+
+.loading .bubble::after {
+  content: " Cargando...";
+  color: #666;
+  font-style: italic;
+}
