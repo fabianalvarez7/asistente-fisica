@@ -49,7 +49,10 @@ class VectorStore:
         """Colección de ChromaDB. Se crea la primera vez."""
         if self._collection is None:
             client = self._get_client()
-            self._collection = client.get_or_create_collection(self.collection_name)
+            self._collection = client.get_or_create_collection(
+                self.collection_name,
+                metadata={"hnsw:space": "cosine"},
+            )
         return self._collection
 
     def add_documents(
@@ -119,6 +122,39 @@ class VectorStore:
             metadata = results["metadatas"][0][i] if results["metadatas"] else {}
             documents.append(Document(page_content=text, metadata=metadata))
         return documents
+
+    def similarity_search_with_scores(
+        self,
+        query_embedding: list[float],
+        k: int = 4,
+    ) -> list[tuple[Document, float]]:
+        """Busca los k Documents más similares, devolviendo distancias.
+
+        La distancia es la devuelta por ChromaDB según el espacio configurado
+        en la colección (cosine en este proyecto). Deja `similarity_search()`
+        intacta para no romper scripts existentes.
+
+        Args:
+            query_embedding: Embedding de la consulta.
+            k: Cantidad de resultados a devolver.
+
+        Returns:
+            Lista de tuplas (Document, distancia) ordenadas por distancia
+            ascendente (más similar primero).
+        """
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=k,
+            include=["documents", "metadatas", "distances"],
+        )
+        scored_documents: list[tuple[Document, float]] = []
+        if not results["documents"] or not results["distances"]:
+            return scored_documents
+        for i, text in enumerate(results["documents"][0]):
+            metadata = results["metadatas"][0][i] if results["metadatas"] else {}
+            distance = results["distances"][0][i]
+            scored_documents.append((Document(page_content=text, metadata=metadata), float(distance)))
+        return scored_documents
 
     def count(self) -> int:
         """Cantidad de documentos indexados."""
