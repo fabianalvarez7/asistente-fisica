@@ -1,9 +1,14 @@
 # RAG
 langchain>=0.3
 langchain-community>=0.3
-chromadb>=0.5
+chromadb==1.5.9
 sentence-transformers>=3.0
 pymupdf4llm>=0.0.10
+
+# Chat transport
+fastapi
+uvicorn[standard]
+openai
 
 # PDF OCR con extracción de fórmulas (markdown + LaTeX)
 # Decisión documentada en docs/adr/0001-pdf-loader-marker.md
