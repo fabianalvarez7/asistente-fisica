@@ -16,7 +16,7 @@ from typing import Iterable
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-DEFAULT_CHUNK_SIZE = 1000
+DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 200
 
 
