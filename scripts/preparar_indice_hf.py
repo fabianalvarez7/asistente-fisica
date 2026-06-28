@@ -1,14 +1,14 @@
-"""Pre-bake the HuggingFace embedding model for Render deploy.
+"""Pre-bake the HuggingFace embedding model for HF Spaces deploy.
 
 Idempotent script that ensures `intfloat/multilingual-e5-small` is available
 locally under `rag/index/hf-model/`. It uses `SentenceTransformer` first-load
 with `SENTENCE_TRANSFORMERS_HOME` and `HF_HOME` pointing to the same directory,
 so sentence-transformers downloads exactly the files it needs (no duplicate
-onnx/openvino/pytorch copies). On Render the same env vars point to the
+onnx/openvino/pytorch copies). On the Space the same env vars point to the
 pre-baked path, avoiding any download on cold start.
 
 Usage:
-    python scripts/preparar_indice_render.py
+    python scripts/preparar_indice_hf.py
 
 Env:
     SENTENCE_TRANSFORMERS_HOME / HF_HOME (optional): override cache dir.
