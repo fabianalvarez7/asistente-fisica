@@ -1,3 +1,13 @@
+---
+title: Asistente de Física 1
+emoji: 🧲
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Asistente de Física
 
 > Asistente Socrático de chat para estudiantes de **Física 1** (UNR). El asistente guía con preguntas; nunca resuelve el ejercicio. Las respuestas se generan exclusivamente desde los PDFs de la materia.
@@ -9,13 +19,13 @@
 | Backend | FastAPI (semana 3-4) |
 | RAG | LangChain como toolbox + orquestación propia en `rag/` |
 | Vector store | ChromaDB (persistente, local) |
-| PDF loader | marker-pdf (con OCR + LaTeX) |
+| PDF loader | pymupdf4llm (rápido, suficiente para el cuadernillo) |
 | Embeddings | `intfloat/multilingual-e5-small` (local, MPS/CUDA/CPU) |
 | LLM | Groq (API) |
 | Persistencia | SQLite (semana 5-6) |
 | Frontend chat | HTML + JS plano (semana 3-4) |
 | Frontend dashboard | Streamlit (mes 3, opcional) |
-| Deploy | Render free tier |
+| Deploy | Hugging Face Spaces Docker (free cpu-basic) |
 
 Decisiones de arquitectura y no-negociables del proyecto: ver `AGENTS.md`.
 
