@@ -27,6 +27,11 @@ from rag.history import (
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
 
+# Load .env into os.environ BEFORE any boot assertion. HF Spaces injects env
+# vars directly (no .env file), but local dev needs python-dotenv to bridge
+# the .env file to os.environ. The boot assertions below read via os.getenv.
+load_dotenv()
+
 # -----------------------------------------------------------------------------
 # Boot assertions — fail fast before accepting traffic
 # -----------------------------------------------------------------------------
