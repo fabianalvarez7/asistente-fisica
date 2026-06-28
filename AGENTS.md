@@ -53,7 +53,7 @@ These are not preferences. They are the project's hard boundaries.
 | PDF → Markdown | **pymupdf4llm** (start), with `marker-pdf` or **Mathpix** as plan B if formulas/images are lost | pymupdf4llm is the lightest starting point. Mathpix has a 1000-page/month free tier. |
 | Frontend (chat) | **Plain HTML + CSS + JS** served by FastAPI | One page. No React, no SPA. Fetch to `/chat` endpoint. |
 | Frontend (dashboard) | **Streamlit** | Ideal for static analytics, charts, filters. No conversational state. |
-| Deploy | **Render** (free tier) | Fabián has used it before. We accept the cold-start trade-off for the prototype. |
+| Deploy | **Hugging Face Spaces Docker** (free cpu-basic) | 16 GB RAM, supports Docker, ~48 h sleep. Replaces Render after OOM at 967 MB. |
 
 ## 5. Repository Structure
 
@@ -133,7 +133,7 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 7. **SQLite for history, not Postgres yet.** A file. Zero setup. We know how to migrate to Postgres when the prototype graduates. Not before.
 
-8. **Render for deploy, accepting the cold-start.** The free tier sleeps after ~15 minutes of inactivity. The first student who opens the app will wait 30-50 seconds. This is a known cost of "free" and we accept it for the prototype.
+8. **Hugging Face Spaces for deploy, accepting the cold-start.** The free `cpu-basic` tier gives us 16 GB RAM and sleeps after ~48 hours of inactivity. This replaces Render, where the prototype OOM'd at ~967 MB against a 512 MB cap. The first visitor after sleep waits ~20-40 seconds for the container to spin up.
 
 9. **LangChain as a toolbox, not a framework.** We use only the parts we need (loaders, splitters, retrievers). We do not use LangChain's agent abstractions, chains of chains, or memory helpers. We own the orchestration in `rag/chain.py`. This keeps the learning path honest and avoids the "LangChain magic" trap.
 
@@ -142,6 +142,8 @@ Each decision here was made consciously. Do not revert them without a written AD
 11. **Typed-name identification for the chat, not user/password auth.** The prototype asks the student for a display name and uses it as the identity key for the SQLite history thread. This keeps the barrier to entry low: no passwords, no email, no session cookies. The trade-offs are intentional and accepted: two students who type the exact same name share a thread (we do not disambiguate "Ana" vs "Ana"), and there is no logout because there is no session. A future auth hardening pass can replace this without changing the history schema.
 
 12. **HF Spaces deploy accepts ephemeral-disk history loss.** The prototype may be deployed to Hugging Face Spaces, whose free tier uses an ephemeral disk that is reset when the space sleeps (roughly after ~48 hours of inactivity). Conversation history lives in SQLite on that disk, so it will be lost on sleep. This is an accepted trade-off for "free" hosting, matching proposal decision 5. If the prototype moves to a faculty server or Render with persistent disk, history survives restarts automatically.
+
+13. **HF Spaces via Docker SDK.** The deploy is described by a `Dockerfile` plus a Space `README.md` with `sdk: docker` and `app_port: 7860`. The container runs as UID 1000, the embedding model is tracked via Git LFS, and pre-baked artifacts survive sleep/wake. This keeps the deploy target explicit and avoids Render-specific magic.
 
 ## 8. Roadmap (indicative, not a contract)
 
@@ -154,7 +156,7 @@ Each decision here was made consciously. Do not revert them without a written AD
 | Weeks | Milestone | Demo-able to Nair? |
 |---|---|---|
 | **1-2** | Repo setup, PDF → Markdown pipeline, ChromaDB indexing, query script in terminal. Validate retrieval quality on the sample PDFs. | **No.** Internal work only. |
-| **3-4** | FastAPI chat endpoint + plain HTML frontend, basic RAG-only chat (no Socratic layer yet). **First deploy to Render (dev environment).** | **Yes.** Informal demo: she can open a URL and chat. |
+| **3-4** | FastAPI chat endpoint + plain HTML frontend, basic RAG-only chat (no Socratic layer yet). **First deploy to HF Spaces (dev environment).** | **Yes.** Informal demo: she can open a URL and chat. |
 | **5-6** | Socratic layer (system prompt + few-shot examples). Iterate with Nair's feedback. Student history in SQLite. Basic identification (name or simple login). | **Yes.** Behaviour is the pedagogical differentiator. |
 | **7-8** | Polish, prompt iteration, auth hardening if time allows. Second Nair demo. | **Yes.** |
 | **9-10** | Optional: Streamlit dashboard for professors. **Cut if it threatens the Socratic layer.** | Maybe. |
@@ -187,7 +189,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 - **Do not make the assistant solve the exercise directly.** The Socratic layer is the point. The system prompt enforces this; do not weaken it.
 - **Do not hardcode API keys, paths, or model names.** Everything that varies between environments goes in `.env` (template in `.env.example`).
 - **Do not put RAG logic inside FastAPI or Streamlit handlers.** It belongs in `rag/`. The transport layers are thin.
-- **Do not assume the production environment matches the dev environment.** Render is Linux, the dev may be macOS or Windows. Test in the closest-to-prod setup you can.
+- **Do not assume the production environment matches the dev environment.** HF Spaces runs a Linux Docker container, the dev may be macOS or Windows. Test in the closest-to-prod setup you can.
 - **Do not use LangChain's high-level abstractions** (Agents, Memory, RetrievalQA with built-in prompts) without reading what they do. We use LangChain as a toolbox, not as a black box.
 - **Do not introduce Docker, Kubernetes, or any container orchestration** for the prototype. The complexity tax is not paid back at this scale.
 - **Do not write code in a hurry to "look productive".** This is a 4-month project, not a sprint. Slow is smooth, smooth is fast.
@@ -211,9 +213,13 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 | `CHROMA_PERSIST_DIR` | No | `./data/chroma` | Where ChromaDB persists its vectors. |
 | `SQLITE_PATH` | No | `./data/historial.db` | Where the conversation history is stored. |
 | `EMBEDDINGS_DEVICE` | No | `auto` | `auto` picks MPS (macOS) / CUDA (Windows with GPU) / CPU. Set explicitly if needed. |
-| `LLM_MODEL` | No | `llama-3.3-70b-versatile` (TBD) | The Groq model used for the chat. Confirm with month 2. |
+| `LLM_MODEL` | No | `llama-3.3-70b-versatile` | The Groq model used for the chat. |
 | `HISTORY_WINDOW` | No | `10` | Number of recent messages injected into the Groq prompt. Set to `0` to disable history injection and restore single-turn behavior. |
 | `PRODUCTION` | No | unset | If set to any value, suppresses the dev-mode console dump of the assembled messages list used for manual review. |
+| `HF_HOME` | No | `./rag/index/hf-model` | Cache for huggingface_hub; points to the pre-baked model snapshot. |
+| `SENTENCE_TRANSFORMERS_HOME` | No | `./rag/index/hf-model` | Cache for sentence-transformers; same path as `HF_HOME` to avoid duplicates. |
+| `OMP_NUM_THREADS` | No | `1` | Caps torch OpenMP threads on the Space's CPU. |
+| `TOKENIZERS_PARALLELISM` | No | `false` | Disables HuggingFace tokenizer parallelism to keep memory stable.
 
 `.env` is **gitignored**. `.env.example` is committed and shows the structure with empty values.
 
