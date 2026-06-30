@@ -16,7 +16,22 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Copy app code and pre-baked artifacts. --chown ensures UID 1000 owns everything.
+# Pre-download the embedding model at build time. HF Spaces' free tier
+# caps GitHub LFS at 100 MB per file, and multilingual-e5-small is
+# 448 MB, so we cannot track the model in git. Downloading here bakes
+# it into the image layer; no network round-trip on first request.
+# Uses scripts/preparar_indice_hf.py so the dev and deploy paths share
+# a single source of truth.
+COPY scripts/preparar_indice_hf.py ./scripts/preparar_indice_hf.py
+RUN mkdir -p /app/rag/index/hf-model && \
+    HF_HOME=/app/rag/index/hf-model \
+    SENTENCE_TRANSFORMERS_HOME=/app/rag/index/hf-model \
+    python scripts/preparar_indice_hf.py && \
+    chown -R user:user /app/rag/index/hf-model
+
+# Copy app code and the pre-baked ChromaDB index. The HF model is
+# excluded from the build context via .dockerignore (already downloaded
+# above, so we never overwrite with a stale local copy).
 COPY --chown=user . .
 
 # Non-sensitive runtime config. Sensitive vars (GROQ_API_KEY) are injected as
