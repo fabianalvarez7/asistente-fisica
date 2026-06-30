@@ -1,8 +1,13 @@
 # ADR 0001: Cambio de PDF loader de pymupdf4llm a marker-pdf
 
-- **Estado**: Aceptado
-- **Fecha**: 2026-06-24
-- **Sesión**: bootstrap semana 1-2
+- **Estado**: SUPERSEDED
+- **Fecha original**: 2026-06-24
+- **Fecha de supersesión**: 2026-06-30
+- **Sesión original**: bootstrap semana 1-2
+
+> **Este ADR documenta una decisión que fue revertida.** Conservado por trazabilidad histórica. La decisión vigente está en el código (`rag/loaders/pdf_loader.py` usa `pymupdf4llm`) y en `requirements.txt` (marker-pdf comentado como plan B). Ver la sección "Por qué se revirtió" al final.
+>
+> **Plan B vigente**: marker-pdf sigue siendo la alternativa si `pymupdf4llm` pierde fórmulas o imágenes en un futuro corpus. No se incluye en el runtime image (Docker) ni en el flujo de indexación por defecto.
 
 ## Contexto
 
@@ -74,3 +79,13 @@ Para los PDFs escaneados puros del corpus inicial (`04-clase-09-04-2025.pdf`, `0
 - Metadata: `{'source': str(path)}`. No incluye `page` por simplicidad — si hace falta, agregar `paginate_output=True` y partir por el separador.
 - Modelos cacheados en singleton (`_CONVERTER`) — no se recargan entre llamadas.
 - `disable_image_extraction=True` para no llenar `data/` de imágenes que no usamos.
+
+## Por qué se revirtió (2026-06-30)
+
+En la práctica, marker-pdf presentó tres problemas que pesaron más que la calidad de OCR:
+
+1. **Tiempo de indexación insostenible**: ~70 min para 3 de 8 PDFs en Mac con MPS. Para el corpus completo (151 páginas) se proyectaban ~5 h por re-bake, lo que bloquea la iteración.
+2. **Tamaño del modelo**: el modelo de marker-pdf ocupa ~3 GB y se cachea por usuario, fuera del repo. Esto rompe la propiedad "todo en el repo, sin cache por máquina" del proyecto.
+3. **Calidad de OCR en PDFs escaneados igual de mala**: los benchmarks oficiales asumen PDFs "limpios"; los PDFs escaneados de la cátedra (los únicos con los que probamos) producen alucinaciones independientemente del loader.
+
+El cuadernillo (único PDF que indexamos, ver decisión sobre corpus) tiene texto seleccionable limpio, así que `pymupdf4llm` lo maneja sin perder fórmulas relevantes para la demo. Si en el futuro se suma material escaneado de calidad, se re-evalúa marker-pdf (mantenido como plan B comentado en `requirements.txt`).
