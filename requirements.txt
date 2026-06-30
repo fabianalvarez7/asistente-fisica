@@ -10,9 +10,11 @@ fastapi
 uvicorn[standard]
 openai
 
-# PDF OCR con extracción de fórmulas (markdown + LaTeX)
-# Decisión documentada en docs/adr/0001-pdf-loader-marker.md
-marker-pdf>=1.0
+# PDF OCR con extracción de fórmulas (markdown + LaTeX) — PLAN B, no instalado
+# Decisión original en docs/adr/0001-pdf-loader-marker.md (SUPERSEDED).
+# Mantenerlo comentado: si pymupdf4llm pierde fórmulas en un corpus futuro,
+# descomentar y reinstalar localmente para re-evaluar. No entra al runtime image.
+# marker-pdf>=1.0
 
 # Embeddings — torch se declara explícito para tener control de versión
 # (MPS en Mac Apple Silicon, CUDA en Windows con GPU NVIDIA)
