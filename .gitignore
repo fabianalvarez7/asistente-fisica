@@ -76,3 +76,4 @@ desktop.ini
 # OpenCode / orchestrator local caches
 .atl/
 .Rhistory
+rag/index/hf-model/hub/
