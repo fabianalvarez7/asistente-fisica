@@ -9,7 +9,6 @@ El Space es un repo separado del repo de GitHub. Solo necesita estos archivos:
 ```text
 .
 ├── Dockerfile
-├── .gitattributes
 ├── README.md          # este archivo, con el YAML header de abajo
 ├── requirements.txt
 ├── app/
@@ -20,10 +19,11 @@ El Space es un repo separado del repo de GitHub. Solo necesita estos archivos:
 │   ├── loaders/
 │   ├── splitters/
 │   └── index/
-│       ├── chroma/    # índice pre-bakeado (git normal)
-│       └── hf-model/  # modelo vía Git LFS
+│       └── chroma/    # índice pre-bakeado (git normal, ~500 KB)
 └── scripts/
 ```
+
+> El modelo de embeddings **no se copia** al repo del Space. El Dockerfile lo descarga en build time usando `scripts/preparar_indice_hf.py`. Trackearlo vía Git LFS no es viable: GitHub LFS free tier limita archivos a 100 MB y el modelo pesa 448 MB.
 
 ## Plantilla de README.md para el Space
 
@@ -56,16 +56,17 @@ Funciona con RAG (ChromaDB + multilingual-e5-small) y Groq (LLM).
    - Visibility: `Public`
 2. Clonar el repo del Space.
 3. Copiar desde el repo de GitHub:
-   - `Dockerfile`, `.gitattributes`, `requirements.txt`
-   - `app/`, `rag/` (incluyendo `rag/index/chroma/` y `rag/index/hf-model/`)
+   - `Dockerfile`, `requirements.txt`
+   - `app/`, `rag/` (incluyendo `rag/index/chroma/`, **sin** `rag/index/hf-model/`)
 4. En el repo del Space:
 
    ```bash
-   git lfs install
    git add .
    git commit -m "deploy: asistente-fisica"
    git push
    ```
+
+> El primer build tarda más de lo normal (~3-5 min extra) porque el Dockerfile descarga el modelo de embeddings. Los rebuilds siguientes lo reutilizan del cache de capas.
 
 5. En la UI del Space, ir a **Settings → Secrets** y agregar `GROQ_API_KEY`.
 6. Esperar el build y probar la URL pública.

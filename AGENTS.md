@@ -72,8 +72,7 @@ asistente-fisica/
 │   ├── chroma/          # dev-time index when re-indexing locally
 │   └── historial.db
 ├── rag/index/           # Pre-baked artifacts (COMMITTED, deploy-time only)
-│   ├── chroma/          # baked index — read-only at runtime
-│   └── hf-model/        # LFS-tracked embedding model snapshot
+│   └── chroma/          # baked index — read-only at runtime
 ├── tests/               # Pytest tests (when they arrive)
 ├── docs/                # Architecture decisions, ADRs, what we discussed
 ├── .env.example         # Template for GROQ_API_KEY, etc.
@@ -81,6 +80,8 @@ asistente-fisica/
 ├── requirements.txt
 └── AGENTS.md            # This file
 ```
+
+> `rag/index/hf-model/` is **not** in the repo. The Dockerfile downloads the embedding model (`intfloat/multilingual-e5-small`, 448 MB) at build time using `scripts/preparar_indice_hf.py` — GitHub LFS free tier caps per-file uploads at 100 MB, so tracking the model in git is not viable. Local devs run the same script (or just the app once) to populate the dir; it is gitignored.
 
 **Rule:** business logic lives in `rag/`. FastAPI and Streamlit are thin transport layers. They do not contain retrieval or prompt logic. This separation is what allows us to swap pieces without rewriting endpoints.
 
