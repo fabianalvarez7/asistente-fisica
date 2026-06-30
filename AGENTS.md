@@ -68,9 +68,12 @@ asistente-fisica/
 │   ├── prompts/         # System prompts (including the Socratic layer)
 │   └── chain.py         # Orchestration (RAG pipeline composition)
 ├── scripts/             # CLI scripts (index PDFs, run dev tasks)
-├── data/                # ChromaDB and SQLite (GITIGNORED)
-│   ├── chroma/
+├── data/                # ChromaDB and SQLite (GITIGNORED, dev/local only)
+│   ├── chroma/          # dev-time index when re-indexing locally
 │   └── historial.db
+├── rag/index/           # Pre-baked artifacts (COMMITTED, deploy-time only)
+│   ├── chroma/          # baked index — read-only at runtime
+│   └── hf-model/        # LFS-tracked embedding model snapshot
 ├── tests/               # Pytest tests (when they arrive)
 ├── docs/                # Architecture decisions, ADRs, what we discussed
 ├── .env.example         # Template for GROQ_API_KEY, etc.
@@ -191,7 +194,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 - **Do not put RAG logic inside FastAPI or Streamlit handlers.** It belongs in `rag/`. The transport layers are thin.
 - **Do not assume the production environment matches the dev environment.** HF Spaces runs a Linux Docker container, the dev may be macOS or Windows. Test in the closest-to-prod setup you can.
 - **Do not use LangChain's high-level abstractions** (Agents, Memory, RetrievalQA with built-in prompts) without reading what they do. We use LangChain as a toolbox, not as a black box.
-- **Do not introduce Docker, Kubernetes, or any container orchestration** for the prototype. The complexity tax is not paid back at this scale.
+- **Do not introduce Docker, Kubernetes, or any container orchestration** for the prototype. The single `Dockerfile` we have is a deploy artifact for HF Spaces (§7.11), not a dev tool. Do not add docker-compose, multi-stage builds, orchestration, or "containerize the dev workflow" proposals.
 - **Do not write code in a hurry to "look productive".** This is a 4-month project, not a sprint. Slow is smooth, smooth is fast.
 - **Do not add features Nair did not ask for.** If in doubt, ask Nair through Fabián.
 
@@ -199,7 +202,8 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 
 | Command | What it does |
 |---|---|
-| `python scripts/indexar_pdfs.py` | Reads PDFs from `data/pdfs/`, chunks, embeds, and writes to ChromaDB. |
+| `python scripts/indexar_pdfs.py` | Reads PDFs from `data/pdfs/`, chunks, embeds, and writes to ChromaDB (dev/local). |
+| `python scripts/preparar_indice_hf.py` | Re-bakes `rag/index/chroma/` and re-validates the embedding model snapshot at `rag/index/hf-model/`. Run after a corpus change, before pushing a new deploy. |
 | `uvicorn app.main:app --reload` | Runs the chat backend in dev mode. |
 | `streamlit run dashboard/app.py` | Runs the professor dashboard. |
 | `pytest` | Runs tests (when they exist). |
@@ -210,7 +214,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `GROQ_API_KEY` | Yes | — | API key for Groq. Get one at https://console.groq.com. Each dev has their own. |
-| `CHROMA_PERSIST_DIR` | No | `./data/chroma` | Where ChromaDB persists its vectors. |
+| `CHROMA_PERSIST_DIR` | No | dev: `./data/chroma`; deploy (Dockerfile ENV): `./rag/index/chroma` | Where ChromaDB persists its vectors. Dev writes to `data/` (gitignored); the deployed Space reads from the committed `rag/index/chroma/` bake. Do not point dev at the deploy path — `scripts/preparar_indice_hf.py` is the only writer for that path. |
 | `SQLITE_PATH` | No | `./data/historial.db` | Where the conversation history is stored. |
 | `EMBEDDINGS_DEVICE` | No | `auto` | `auto` picks MPS (macOS) / CUDA (Windows with GPU) / CPU. Set explicitly if needed. |
 | `LLM_MODEL` | No | `llama-3.3-70b-versatile` | The Groq model used for the chat. |
@@ -227,7 +231,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 
 These are the questions we have not yet answered. Some of them are blocking for future work; others are nice to know. They are listed in the order we should tackle them.
 
-- [ ] **Faculty server for deploy?** Fabián is checking. If yes, we may move from Render to a faculty-hosted URL.
+- [x] **Faculty server for deploy?** Resolved 2026-06-30: we ship to HF Spaces Docker (`cpu-basic`, 16 GB). See decision #8 / #11 in §7 and `docs/hf-space.md` for the deploy runbook. Revisit if the faculty offers a maintained institutional URL.
 - [ ] **Language of the code** (English vs Spanish for variable names, comments, commit messages). Default if no decision: English (industry standard, easier to search).
 - [ ] **Nair's checkpoint cadence** — formal reviews or informal demos? Affects the Definition of Done for each milestone.
 - [ ] **PDF processing tool** — start with `pymupdf4llm`, but evaluate `marker-pdf` and `docling` if formulas and diagrams are lost in the first indexation.
