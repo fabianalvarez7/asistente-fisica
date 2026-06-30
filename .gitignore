@@ -76,12 +76,10 @@ desktop.ini
 # OpenCode / orchestrator local caches
 .atl/
 .Rhistory
-<<<<<<< HEAD
-=======
 
-# HF hub cache: huggingface_hub creates this when downloading a model.
-# The actual model weights live in the LFS-tracked snapshot dir above
-# (rag/index/hf-model/models--intfloat--multilingual-e5-small/snapshots/...);
-# this hub/ cache is a duplicate and can grow to ~478 MB. Never commit.
->>>>>>> 173fbdc (chore(gitignore): exclude HF hub cache to prevent 478MB pollution)
-rag/index/hf-model/hub/
+# HF embedding model snapshot. NOT committed: the model is 448 MB which
+# exceeds GitHub LFS free tier's 100 MB per-file limit. The Dockerfile
+# downloads it at build time (`scripts/preparar_indice_hf.py` does the
+# same for local dev). After a clone, the dev runs the script (or just
+# the app once) to populate this dir.
+rag/index/hf-model/

@@ -30,11 +30,11 @@ __pycache__/
 data/
 material-fisica/
 
-# HF hub cache: huggingface_hub creates this when downloading a model.
-# The actual model weights live in the LFS-tracked snapshot dir above
-# (rag/index/hf-model/models--intfloat--multilingual-e5-small/snapshots/...);
-# this hub/ cache is a duplicate and can grow to ~478 MB. Never commit.
-rag/index/hf-model/hub/
+# HF embedding model. The Dockerfile downloads it at build time
+# (HF Spaces LFS free tier caps at 100 MB; this model is 448 MB).
+# The local dev may have it under rag/index/hf-model/ — exclude it
+# from the build context so we never bake a stale local copy.
+rag/index/hf-model/
 
 # IDEs / editors / OS junk
 .vscode/
