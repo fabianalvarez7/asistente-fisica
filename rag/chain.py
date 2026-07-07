@@ -2,6 +2,10 @@
 
 Thin composition layer (AGENTS.md §7 decision 9): embed → retrieve →
 threshold → prompt → Groq SSE stream. Keeps all RAG logic out of FastAPI.
+
+The Groq call injects a static few-shot message block before the live query
+so the model sees concrete Socratic user/assistant turns without bloating the
+system prompt.
 """
 
 import os
@@ -24,6 +28,57 @@ _VECTOR_STORE = VectorStore()
 _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 _DISTANCE_THRESHOLD = 0.5  # cosine distance; distance <= 0.5 => cos_sim >= 0.5
 _NO_CONTEXT_FALLBACK = "No encuentro info sobre esto en los apuntes"
+
+# Few-shot Socratic examples: 3 user/assistant pairs spanning error theory,
+# kinematics, and dynamics. Each assistant turn uses Rioplatense voseo, ends
+# with a guiding question, and never gives a final numerical answer.
+_FEW_SHOT = [
+    {
+        "role": "user",
+        "content": "¿Cuál es la fórmula del error relativo porcentual?",
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "Antes de darte la fórmula, pensemos juntos. El error relativo "
+            "porcentual sirve para comparar el error absoluto con el valor "
+            "medido. ¿Qué operación se te ocurre entre el error absoluto y el "
+            "valor verdadero para expresar esa comparación?"
+        ),
+    },
+    {
+        "role": "user",
+        "content": (
+            "Un auto frena de 60 km/h a 0 en 5 segundos. "
+            "¿Cuánto vale la aceleración?"
+        ),
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "Buen problema. Antes de calcular nada, identifiquemos los datos. "
+            "¿Podés listar la velocidad inicial, la velocidad final y el tiempo "
+            "que tardó en frenar? Una vez que los tengas, ¿qué ecuación de "
+            "cinemática relaciona esas tres variables con la aceleración?"
+        ),
+    },
+    {
+        "role": "user",
+        "content": (
+            "No entiendo cómo aplicar las leyes de Newton a un bloque sobre "
+            "un plano inclinado."
+        ),
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "Tranquilo, vamos de a poco. Cuando tenés un cuerpo sobre un plano "
+            "inclinado, conviene descomponer las fuerzas en direcciones "
+            "paralelas y perpendiculares al plano. ¿Qué fuerzas actúan sobre el "
+            "bloque y en qué direcciones las dibujarías?"
+        ),
+    },
+]
 
 
 def _build_context(documents: list) -> str:
@@ -75,6 +130,7 @@ def generate_response(query: str) -> Generator[str, None, None]:
             model=model,
             messages=[
                 {"role": "system", "content": prompt},
+                *_FEW_SHOT,
                 {"role": "user", "content": query},
             ],
             stream=True,
