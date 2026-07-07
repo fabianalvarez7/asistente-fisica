@@ -4,6 +4,9 @@ Thin by design: all RAG logic lives in rag/chain.py. This module only wires
 HTTP/SSE to the generator and serves the static chat UI.
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 
 from fastapi import FastAPI
