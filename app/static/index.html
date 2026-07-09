@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistente de Física 1</title>
   <link rel="stylesheet" href="/style.css">
+  <!-- KaTeX renders LaTeX math that the assistant streams back (e.g. $F = ma$). -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 <body>
   <main class="chat-container">
@@ -31,6 +33,9 @@
     <div id="hint" class="hint" role="status" aria-live="assertive"></div>
   </main>
 
-  <script src="/chat.js"></script>
+  <!-- KaTeX (core + auto-render extension) loads before chat.js so the helper can call renderMathInElement. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script defer src="/chat.js"></script>
 </body>
 </html>
