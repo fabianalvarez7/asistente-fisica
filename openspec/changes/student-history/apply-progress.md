@@ -24,6 +24,7 @@ manually in a browser by the user; it is not automated.
 | `d3513f0` | `feat(app): expose message IDs in SSE stream` |
 | `c56d840` | `feat(ui): add student name gate, history rendering, and message delete` |
 | `e9deb57` | `docs: document history window config and typed-name auth trade-offs` |
+| `8e49ee4` | `docs(apply): record Task 5 config and docs completion` |
 
 ## Diff Summary
 
