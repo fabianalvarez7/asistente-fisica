@@ -22,6 +22,32 @@ const sendBtn = document.getElementById('send-btn');
 const MAX_CHARS = 500;
 const FALLBACK_ERROR = 'Ocurrió un error, intentá de nuevo';
 
+/**
+ * Render LaTeX math in an element using KaTeX auto-render.
+ *
+ * Supports $...$ (inline) and $$...$$ (display) delimiters. The LLM emits
+ * these naturally for physics formulas (e.g. $F = ma$). throwOnError:false
+ * keeps the page rendering even if the model produces malformed LaTeX.
+ *
+ * Safe to call repeatedly: renderMathInElement is idempotent on already-
+ * rendered nodes, and we only call it once per assistant message on [DONE].
+ *
+ * Guarded by typeof because KaTeX loads from a CDN and may not be ready
+ * in unusual load orders (e.g. if the CDN is blocked).
+ */
+function renderMathInBubble(element) {
+  if (typeof window.renderMathInElement !== 'function') return;
+  window.renderMathInElement(element, {
+    delimiters: [
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false },
+      { left: '\\[', right: '\\]', display: true },
+    ],
+    throwOnError: false,
+  });
+}
+
 function setLoading(isLoading) {
   input.disabled = isLoading;
   sendBtn.disabled = isLoading;
@@ -78,6 +104,7 @@ function processFrame(frame, elements) {
 
   if (dataValue === '[DONE]') {
     elements.li.classList.remove('loading');
+    renderMathInBubble(elements.bubble);
     return;
   }
 
