@@ -104,14 +104,14 @@ Chain strategy: pending
 **Depends on**: Task 3
 
 #### Acceptance criteria
-- [ ] `index.html`: name input area (`#name-area`) with `#student-name` input and `#name-submit` button appears above `#chat-form`; chat input starts `disabled`
-- [ ] `chat.js`: on name submit (click or Enter), stores name in `localStorage`, hides name area, enables chat input, calls `loadHistory()`
-- [ ] `chat.js`: on page load, if `localStorage.student_name` exists, skips name area and calls `loadHistory()`
-- [ ] `chat.js`: `loadHistory()` fetches `GET /history?student_name=...` and renders each message with a delete button (`<button class="delete-btn" data-message-id="...">×</button>`)
-- [ ] `chat.js`: `sendMessage` includes `student_name` in the `POST /chat` body
-- [ ] `chat.js`: delete button click handler sends `DELETE /messages/{id}?student_name=...`; on 200 removes the `.message` element from DOM; on 403/404 silently ignores
-- [ ] `chat.js`: new messages rendered during chat also get delete buttons (with `data-message-id` from the response — requires backend to return message IDs in SSE or a follow-up)
-- [ ] `style.css`: `.name-area`, `#student-name`, `#name-submit` styled consistently with existing input area; `.delete-btn` is a small `×` positioned in the message bubble corner
+- [x] `index.html`: name input area (`#name-area`) with `#student-name` input and `#name-submit` button appears above `#chat-form`; chat input starts `disabled`
+- [x] `chat.js`: on name submit (click or Enter), stores name in `localStorage`, hides name area, enables chat input, calls `loadHistory()`
+- [x] `chat.js`: on page load, if `localStorage.student_name` exists, skips name area and calls `loadHistory()`
+- [x] `chat.js`: `loadHistory()` fetches `GET /history?student_name=...` and renders each message with a delete button (`<button class="delete-btn" data-message-id="..."></button>`)
+- [x] `chat.js`: `sendMessage` includes `student_name` in the `POST /chat` body
+- [x] `chat.js`: delete button click handler sends `DELETE /messages/{id}?student_name=...`; on 200 removes the `.message` element from DOM; on 403/404 silently ignores
+- [x] `chat.js`: new messages rendered during chat also get delete buttons (with `data-message-id` from the response — requires backend to return message IDs in SSE or a follow-up)
+- [x] `style.css`: `.name-area`, `#student-name`, `#name-submit` styled consistently with existing input area; `.delete-btn` is a small `×` positioned in the message bubble corner
 
 **Commit**: `feat(ui): add student name gate, history rendering, and message delete`
 **Verification**: Open in browser. Fresh visit shows name input. Type name, chat enables. Send message, see it persisted. Reload page, history loads. Click × on a message, it disappears.
