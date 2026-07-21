@@ -94,31 +94,48 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
     student_id = get_or_create_student(name)
-    save_message(student_id, "user", req.query)
+    user_message_id = save_message(student_id, "user", req.query)
     history = get_history(student_id, limit=HISTORY_WINDOW)
 
     def event_generator():
         buffer = ""
         failed = False
+        assistant_message_id = None
+
+        yield f"event: user_message_id\ndata: {user_message_id}\n\n"
+
         try:
             for token in generate_response(req.query, history=history):
-                yield token
-
                 if token.startswith("event: error"):
                     failed = True
+                    assistant_message_id = save_message(
+                        student_id, "assistant", ERROR_FALLBACK
+                    )
+                    yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
+                    yield token
                     continue
 
                 if token.startswith("data: "):
                     payload = token[6:].removesuffix("\n\n")
                     if payload == "[DONE]":
                         if failed:
-                            save_message(student_id, "assistant", ERROR_FALLBACK)
+                            # The error path already persisted the fallback.
+                            pass
                         else:
-                            save_message(student_id, "assistant", buffer)
+                            assistant_message_id = save_message(
+                                student_id, "assistant", buffer
+                            )
+                            yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
+                        yield token
                         return
                     buffer += payload
+
+                yield token
         except Exception:  # noqa: BLE001
-            save_message(student_id, "assistant", ERROR_FALLBACK)
+            assistant_message_id = save_message(
+                student_id, "assistant", ERROR_FALLBACK
+            )
+            yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
             yield "data: [DONE]\n\n"
 
