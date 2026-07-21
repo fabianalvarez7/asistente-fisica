@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import sqlite3
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -19,11 +18,11 @@ from pydantic import BaseModel, Field
 from rag.history import (
     init_db,
     get_or_create_student,
+    get_student_by_name,
+    get_message_owner,
     save_message,
     get_history,
     delete_message,
-    _db_path,
-    _configure_connection,
 )
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
@@ -58,7 +57,7 @@ ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 # -----------------------------------------------------------------------------
 # Schema init — safe to call repeatedly (CREATE TABLE IF NOT EXISTS)
 # -----------------------------------------------------------------------------
-init_db(_db_path())
+init_db()
 
 # -----------------------------------------------------------------------------
 # App
@@ -80,17 +79,6 @@ class ChatRequest(BaseModel):
         min_length=1,
         description="Display name typed by the student. Required — no anonymous chat.",
     )
-
-
-def _student_id_by_name(display_name: str) -> int | None:
-    """Return the id for an existing student, or None if not yet created."""
-    with sqlite3.connect(_db_path()) as conn:
-        _configure_connection(conn)
-        row = conn.execute(
-            "SELECT id FROM students WHERE display_name = ?",
-            (display_name,),
-        ).fetchone()
-    return row[0] if row else None
 
 
 @app.post("/chat")
@@ -144,7 +132,7 @@ async def get_history_endpoint(student_name: str):
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
-    student_id = _student_id_by_name(name)
+    student_id = get_student_by_name(name)
     if student_id is None:
         return {"messages": []}
 
@@ -159,18 +147,12 @@ async def delete_message_endpoint(message_id: int, student_name: str):
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
-    with sqlite3.connect(_db_path()) as conn:
-        _configure_connection(conn)
-        message_row = conn.execute(
-            "SELECT student_id FROM messages WHERE id = ?",
-            (message_id,),
-        ).fetchone()
-
-    if message_row is None:
+    message_owner = get_message_owner(message_id)
+    if message_owner is None:
         raise HTTPException(status_code=404, detail="message not found")
 
-    requester_id = _student_id_by_name(name)
-    if requester_id is None or message_row[0] != requester_id:
+    requester_id = get_student_by_name(name)
+    if requester_id is None or message_owner != requester_id:
         raise HTTPException(status_code=403, detail="not authorized")
 
     delete_message(message_id, requester_id)
