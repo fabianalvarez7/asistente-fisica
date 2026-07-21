@@ -4,8 +4,8 @@
 
 **partial**
 
-Tasks 1-4 are complete and verified. Tasks 5-6 remain pending and will be
-implemented in subsequent sessions as instructed.
+Tasks 1-5 are complete and verified. Task 6 remains pending and must be run
+manually in a browser by the user; it is not automated.
 
 ## Branch
 
@@ -23,6 +23,7 @@ implemented in subsequent sessions as instructed.
 | `09bb749` | `docs(apply): record Task 3 deviation fix and helper smoke test results` |
 | `d3513f0` | `feat(app): expose message IDs in SSE stream` |
 | `c56d840` | `feat(ui): add student name gate, history rendering, and message delete` |
+| `e9deb57` | `docs: document history window config and typed-name auth trade-offs` |
 
 ## Diff Summary
 
@@ -60,8 +61,8 @@ implemented in subsequent sessions as instructed.
   level after `load_dotenv()`, and `HISTORY_WINDOW` is read from the environment
   with a default of 10.
 - [x] **4** — Added the frontend name gate, history loading, and per-message delete buttons. Newly streamed messages receive their persistent ids via the SSE handshake so every rendered message has a working delete button.
-- [ ] **5** — Deferred.
-- [ ] **6** — Deferred.
+- [x] **5** — Updated `.env.example` and `AGENTS.md` to document `HISTORY_WINDOW`, `PRODUCTION`, typed-name identification trade-offs, and the HF Spaces ephemeral-disk history-loss trade-off.
+- [ ] **6** — Manual test run (deferred to the user).
 
 ## Test Results
 
@@ -325,9 +326,9 @@ All Task 3 smoke checks passed.
 
 ## Next Recommended
 
-Task 4 in the next session: add the frontend name gate, history loading, and
-per-message delete buttons to `app/static/index.html`, `app/static/chat.js`, and
-`app/static/style.css`.
+Task 6 (manual): execute the 10 manual test cases from `design.md` in a browser,
+record pass/fail in `tests/student_history_run_<YYYY-MM-DD>.md`, and commit the
+results file.
 
 ---
 
@@ -463,4 +464,102 @@ ready to start; they are independent of each other but both depend on Task 3.
 Rolling back Task 4 requires reverting the two commits above. The frontend files
 and `app/main.py` are the only production code touched; `tests/test_chat_sse_message_ids.py`
 can be removed or left in place (it does not depend on the frontend).
+
+---
+
+# Task 5 — Configuration & Documentation
+
+## Commits
+
+| SHA | Message |
+|-----|---------|
+| `e9deb57` | `docs: document history window config and typed-name auth trade-offs` |
+
+## Diff Summary
+
+| File | Action | Δ lines |
+|------|--------|---------|
+| `.env.example` | Modified | +8 / -0 |
+| `AGENTS.md` | Modified | +6 / -0 |
+| `openspec/changes/student-history/tasks.md` | Modified | +5 / -5 |
+| **Task 5 total** | | **+19 / -5** |
+
+## Tasks Completed
+
+- [x] `.env.example` adds `HISTORY_WINDOW=10` with a comment explaining its purpose
+  and that `0` disables history injection.
+- [x] `.env.example` adds `PRODUCTION` (commented out) with a note that setting it
+  suppresses the dev-mode message dump.
+- [x] `AGENTS.md` §7 adds decision 11 documenting typed-name identification and its
+  trade-offs (name collisions, no logout, easy future replacement).
+- [x] `AGENTS.md` §7 adds decision 12 documenting the HF Spaces ephemeral-disk
+  history-loss trade-off and references proposal decision 5.
+- [x] `AGENTS.md` §12 adds `HISTORY_WINDOW` and `PRODUCTION` rows to the environment
+  variables table.
+
+## Verification
+
+### Git diff excerpt
+
+```diff
+diff --git a/.env.example b/.env.example
+@@ -22,5 +22,13 @@ SENTENCE_TRANSFORMERS_HOME=./rag/index/hf-model
+ OMP_NUM_THREADS=1
+ TOKENIZERS_PARALLELISM=false
+
++# Ventana de historial inyectada en el prompt de Groq (en mensajes).
++# 0 desactiva la inyección de historial y restaura el comportamiento de un solo turno.
++HISTORY_WINDOW=10
++
++# Modo producción. Si está definido, suprime el volcado de mensajes en consola
++# que se usa para revisión manual en desarrollo.
++# PRODUCTION=true
++
+ # Modelo de Groq (confirmado para el prototipo)
+ # LLM_MODEL=llama-3.3-70b-versatile
+
+diff --git a/AGENTS.md b/AGENTS.md
+@@ -139,6 +139,10 @@
+ 10. **All content and code is in the repo. No cloned third-party RAG repos.** ...
+
++11. **Typed-name identification for the chat, not user/password auth.** ...
++
++12. **HF Spaces deploy accepts ephemeral-disk history loss.** ...
++
+ ## 8. Roadmap (indicative, not a contract)
+
+@@ -208,6 +212,8 @@
+ | `EMBEDDINGS_DEVICE` | No | `auto` | ... |
+ | `LLM_MODEL` | No | `llama-3.3-70b-versatile` (TBD) | ... |
++| `HISTORY_WINDOW` | No | `10` | ... |
++| `PRODUCTION` | No | unset | ... |
+```
+
+### Read-back check
+
+- `.env.example` contains `HISTORY_WINDOW=10` and a commented `# PRODUCTION=true`
+  with explanatory comments.
+- `AGENTS.md` §7 contains decisions 11 and 12.
+- `AGENTS.md` §12 table contains `HISTORY_WINDOW` and `PRODUCTION` rows.
+- New entries match the existing documentation style (English prose in AGENTS.md,
+  Spanish comments in `.env.example`).
+
+## SHALL Coverage (conversation-persistence spec)
+
+| SHALL | Requirement | Covered by |
+|-------|-------------|------------|
+| `HISTORY_WINDOW` env var default 10 | Documented in `.env.example` and `AGENTS.md` §12 | Task 5 |
+| `HISTORY_WINDOW=0` disables injection | Comment in `.env.example` and `AGENTS.md` §12 | Task 5 |
+| `PRODUCTION` suppresses dev-mode dump | Comment in `.env.example` and `AGENTS.md` §12 | Task 5 |
+| Typed-name auth trade-offs recorded | `AGENTS.md` §7 decision 11 | Task 5 |
+| HF Spaces ephemeral-disk trade-off recorded | `AGENTS.md` §7 decision 12 | Task 5 |
+
+## Deviations from Design
+
+None — the documentation matches the decisions and configuration described in
+`design.md`.
+
+## Blockers
+
+None. Task 5 is complete. Task 6 (manual test run) is the remaining work.
 
