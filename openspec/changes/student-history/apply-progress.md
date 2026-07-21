@@ -4,7 +4,7 @@
 
 **partial**
 
-Tasks 1 and 2 are complete and verified. Tasks 3-6 remain pending and will be
+Tasks 1-3 are complete and verified. Tasks 4-6 remain pending and will be
 implemented in subsequent sessions as instructed.
 
 ## Branch
@@ -17,6 +17,7 @@ implemented in subsequent sessions as instructed.
 |-----|---------|
 | `42d61a4` | `feat(rag): add SQLite history module with student + message tables` |
 | `58fe5aa` | `feat(rag): inject conversation history into Groq messages list` |
+| `9cb7d6a` | `feat(app): add student history endpoints and persistence lifecycle` |
 
 ## Diff Summary
 
@@ -24,9 +25,10 @@ implemented in subsequent sessions as instructed.
 |------|--------|---------|
 | `rag/history.py` | Created | +194 / -0 |
 | `rag/chain.py` | Modified | +25 / -6 |
-| `openspec/changes/student-history/tasks.md` | Modified | +215 / -0 |
+| `app/main.py` | Modified | +124 / -7 |
+| `openspec/changes/student-history/tasks.md` | Modified | +8 / -8 |
 | `openspec/changes/student-history/apply-progress.md` | Modified | +185 / -0 |
-| **Total (review budget)** | | **+425 / -6** |
+| **Total (review budget)** | | **+546 / -21** |
 
 ## Tasks Completed
 
@@ -45,7 +47,13 @@ implemented in subsequent sessions as instructed.
   `_FEW_SHOT` content/order and the system prompt are unchanged. No SQLite or
   I/O side effects were introduced; `generate_response` remains a pure
   generator.
-- [ ] **3** — Deferred.
+- [x] **3** — Modified `app/main.py` to add `student_name` to `ChatRequest`,
+  wrapped `POST /chat` with the persistence lifecycle (get/create student → save
+  user message → fetch history window → stream SSE → save assistant message on
+  `[DONE]` or error fallback on exception), and added `GET /history` and
+  `DELETE /messages/{id}` endpoints. `init_db(_db_path())` is called at module
+  level after `load_dotenv()`, and `HISTORY_WINDOW` is read from the environment
+  with a default of 10.
 - [ ] **4** — Deferred.
 - [ ] **5** — Deferred.
 - [ ] **6** — Deferred.
@@ -101,6 +109,35 @@ PASS: chain.py does not import sqlite3
 10/10 checks passed.
 ```
 
+### Task 3
+
+- **File**: smoke test via Python script (`/tmp/task3_smoke.py`) using FastAPI
+  `TestClient` and a mocked `generate_response`.
+- **Tests run**: 16 / 16
+- **Pass / fail**: 16 / 0
+- **Blocker**: none
+
+```text
+PASS: GET /history unknown student returns empty list
+PASS: POST /chat missing student_name returns 422
+PASS: POST /chat whitespace-only name returns 400
+PASS: POST /chat happy path streams SSE
+PASS: POST /chat persists user then assistant
+PASS: GET /history returns ordered history
+PASS: DELETE own message returns 200
+PASS: DELETE own message removes the targeted row
+PASS: DELETE another student's message returns 403
+PASS: DELETE 403 preserves the other student's row
+PASS: DELETE non-existent message returns 404
+PASS: Stream failure persists error fallback
+PASS: No-context fallback persisted
+PASS: HISTORY_WINDOW defaults to 10
+PASS: GET /history missing param returns 422
+PASS: DELETE missing student_name returns 422
+
+16/16 checks passed.
+```
+
 ## SHALL Coverage (conversation-persistence spec)
 
 | SHALL | Requirement | Covered by |
@@ -118,9 +155,17 @@ PASS: chain.py does not import sqlite3
 | Empty history yields no injection | Task 2 (`if history:` guard) |
 | Order/content of system/few-shot preserved | Task 2 (literal `_FEW_SHOT` and `SYSTEM_PROMPT` unchanged) |
 | Token budget for injected history | Design analysis (N=10 × 2 × ~150 tokens ≈ 3000 tokens) |
+| User message persisted before Groq call | Task 3 (`save_message` before `generate_response`) |
+| Assistant message persisted after stream | Task 3 (`save_message` on `[DONE]`) |
+| Stream failure persists error fallback | Task 3 (exception handler saves `ERROR_FALLBACK`) |
+| No-context fallback persisted | Task 3 (buffer equals fallback is persisted as-is) |
+| `GET /history` ordered full history | Task 3 (`get_history_endpoint`) |
+| Unknown name returns empty history | Task 3 (`_student_id_by_name` returns `None` → `[]`) |
+| `DELETE /messages/{id}` 200/403/404 semantics | Task 3 (ownership check via direct SELECT) |
+| `HISTORY_WINDOW` env var default 10 | Task 3 (module-level `HISTORY_WINDOW`) |
+| `init_db()` called at boot after `load_dotenv()` | Task 3 (`init_db(_db_path())` after env load) |
 
-The persistence lifecycle, endpoints, frontend, and manual test plan will be
-covered by Tasks 3-6.
+The frontend integration and full manual test plan will be covered by Tasks 4-6.
 
 ## Deviations from Design
 
@@ -143,18 +188,26 @@ covered by Tasks 3-6.
    is expected to call `generate_response(query, history=history)`; the caller
    handles persistence and history retrieval, while `chain.py` retains its
    existing retrieval responsibility.
+4. **Direct SQLite SELECTs in `app/main.py` for REST semantics** (Task 3): the
+   `rag/history.py` module exposes CRUD helpers but does not provide
+   `get_student_by_name` or `get_message_owner`. To return `{"messages": []}` for
+   unknown students without creating a row, and to distinguish 403 from 404 on
+   `DELETE`, `app/main.py` performs small, read-only SELECTs against the same
+   SQLite file using `rag.history._db_path()` and `_configure_connection()`.
+   All mutations still go through `rag/history.py`.
 
 ## Blockers
 
-None for Tasks 1-2. The next batch (Task 3) depends on Tasks 1 and 2, which are
-now complete.
+None for Tasks 1-3. The next batch (Task 4) depends on Task 3, which is now
+complete.
 
 ## Rollback Confirmation
 
-Rolling back Tasks 1-2 requires reverting the two commits and deleting the DB
-file if it has been initialized:
+Rolling back Tasks 1-3 requires reverting the three commits and deleting the DB
+file if it exists:
 
 ```bash
+git revert 9cb7d6a
 git revert 58fe5aa
 git revert 42d61a4
 rm -f data/historial.db
@@ -168,18 +221,19 @@ Changes so far are limited to:
 
 - `rag/history.py` (Task 1)
 - `rag/chain.py` (Task 2)
+- `app/main.py` (Task 3)
 - `openspec/changes/student-history/tasks.md`
 - `openspec/changes/student-history/apply-progress.md`
 
 No changes were made to:
 
-- `app/main.py` or `app/static/`
+- `app/static/*`
 - `dashboard/`
 - `requirements.txt`
 - `.env.example` or `AGENTS.md`
 
 ## Next Recommended
 
-Task 3 in the next session: add FastAPI endpoints and persistence lifecycle to
-`app/main.py` (`ChatRequest.student_name`, `POST /chat` persistence wrapper,
-`GET /history`, `DELETE /messages/{id}`, and boot-time `init_db()`).
+Task 4 in the next session: add the frontend name gate, history loading, and
+per-message delete buttons to `app/static/index.html`, `app/static/chat.js`, and
+`app/static/style.css`.
