@@ -139,6 +139,10 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 10. **All content and code is in the repo. No cloned third-party RAG repos.** This is a hard rule. We may read other repositories for reference, but we do not copy them. Every line of RAG code in this repo is written and understood by Fabián.
 
+11. **Typed-name identification for the chat, not user/password auth.** The prototype asks the student for a display name and uses it as the identity key for the SQLite history thread. This keeps the barrier to entry low: no passwords, no email, no session cookies. The trade-offs are intentional and accepted: two students who type the exact same name share a thread (we do not disambiguate "Ana" vs "Ana"), and there is no logout because there is no session. A future auth hardening pass can replace this without changing the history schema.
+
+12. **HF Spaces deploy accepts ephemeral-disk history loss.** The prototype may be deployed to Hugging Face Spaces, whose free tier uses an ephemeral disk that is reset when the space sleeps (roughly after ~48 hours of inactivity). Conversation history lives in SQLite on that disk, so it will be lost on sleep. This is an accepted trade-off for "free" hosting, matching proposal decision 5. If the prototype moves to a faculty server or Render with persistent disk, history survives restarts automatically.
+
 ## 8. Roadmap (indicative, not a contract)
 
 **Timeline context:** the project has 4 months total, but Fabián has ~3 months of dedicated dev time (~12 weeks) before returning to other project tasks. The roadmap below fits in that window. Items that do not fit ship later or are cut. The exact week-by-week schedule will be re-anchored once Fabián has Nair's full delivery calendar.
@@ -208,6 +212,8 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 | `SQLITE_PATH` | No | `./data/historial.db` | Where the conversation history is stored. |
 | `EMBEDDINGS_DEVICE` | No | `auto` | `auto` picks MPS (macOS) / CUDA (Windows with GPU) / CPU. Set explicitly if needed. |
 | `LLM_MODEL` | No | `llama-3.3-70b-versatile` (TBD) | The Groq model used for the chat. Confirm with month 2. |
+| `HISTORY_WINDOW` | No | `10` | Number of recent messages injected into the Groq prompt. Set to `0` to disable history injection and restore single-turn behavior. |
+| `PRODUCTION` | No | unset | If set to any value, suppresses the dev-mode console dump of the assembled messages list used for manual review. |
 
 `.env` is **gitignored**. `.env.example` is committed and shows the structure with empty values.
 

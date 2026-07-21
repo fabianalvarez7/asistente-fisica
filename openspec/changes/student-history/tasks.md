@@ -128,11 +128,11 @@ Chain strategy: pending
 **Depends on**: Task 3
 
 #### Acceptance criteria
-- [ ] `.env.example` adds `HISTORY_WINDOW=10` with a comment explaining its purpose and that `0` disables injection
-- [ ] `.env.example` adds `PRODUCTION` (commented out) with a note that setting it suppresses the dev-mode message dump
-- [ ] `AGENTS.md` §7 (Architecture Decisions) adds a new entry documenting the typed-name auth decision and its trade-offs (name collisions, no logout)
-- [ ] `AGENTS.md` §7 adds a note about HF Spaces ephemeral disk losing history on sleep (accepted trade-off, references proposal decision 5)
-- [ ] `AGENTS.md` §12 (Environment Variables) adds `HISTORY_WINDOW` and `PRODUCTION` rows
+- [x] `.env.example` adds `HISTORY_WINDOW=10` with a comment explaining its purpose and that `0` disables injection
+- [x] `.env.example` adds `PRODUCTION` (commented out) with a note that setting it suppresses the dev-mode message dump
+- [x] `AGENTS.md` §7 (Architecture Decisions) adds a new entry documenting the typed-name auth decision and its trade-offs (name collisions, no logout)
+- [x] `AGENTS.md` §7 adds a note about HF Spaces ephemeral disk losing history on sleep (accepted trade-off, references proposal decision 5)
+- [x] `AGENTS.md` §12 (Environment Variables) adds `HISTORY_WINDOW` and `PRODUCTION` rows
 
 **Commit**: `docs: document history window config and typed-name auth trade-offs`
 **Verification**: Read both files. Confirm new entries are present and accurate.
