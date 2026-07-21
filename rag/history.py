@@ -49,12 +49,17 @@ def _configure_connection(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON")
 
 
-def init_db(db_path: str) -> None:
+def init_db(db_path: str | None = None) -> None:
     """Create tables and indexes if they don't exist. Idempotent.
 
     Called once at backend startup. The parent directory is created if
     missing so the first boot on a fresh clone or container succeeds.
+
+    If ``db_path`` is omitted, the configured ``SQLITE_PATH`` environment
+    variable (or the project default) is used.
     """
+    if db_path is None:
+        db_path = _db_path()
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         _configure_connection(conn)
@@ -110,6 +115,37 @@ def get_or_create_student(display_name: str) -> int:
         )
         conn.commit()
         return cursor.lastrowid
+
+
+def get_student_by_name(display_name: str) -> int | None:
+    """Return the `id` of the first row matching `display_name` (case-sensitive).
+
+    Returns `None` if no student with that name exists. Does NOT create a row.
+    """
+    db = _db_path()
+    with sqlite3.connect(db) as conn:
+        _configure_connection(conn)
+        row = conn.execute(
+            "SELECT id FROM students WHERE display_name = ?",
+            (display_name,),
+        ).fetchone()
+        return row[0] if row is not None else None
+
+
+def get_message_owner(message_id: int) -> int | None:
+    """Return the `student_id` of the message with `id = message_id`.
+
+    Returns `None` if the message does not exist. Used to distinguish 404
+    (no such message) from 403 (message exists but belongs to a different student).
+    """
+    db = _db_path()
+    with sqlite3.connect(db) as conn:
+        _configure_connection(conn)
+        row = conn.execute(
+            "SELECT student_id FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+        return row[0] if row is not None else None
 
 
 def save_message(student_id: int, role: str, content: str) -> int:
