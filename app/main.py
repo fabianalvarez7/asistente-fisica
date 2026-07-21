@@ -1,19 +1,30 @@
 """FastAPI transport layer for the Física 1 chat assistant.
 
 Thin by design: all RAG logic lives in rag/chain.py. This module only wires
-HTTP/SSE to the generator and serves the static chat UI.
+HTTP/SSE to the generator, serves the static chat UI, and orchestrates the
+per-student conversation history persisted by rag/history.py.
 """
 
 from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import sqlite3
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from rag.history import (
+    init_db,
+    get_or_create_student,
+    save_message,
+    get_history,
+    delete_message,
+    _db_path,
+    _configure_connection,
+)
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
 
@@ -35,6 +46,21 @@ if _vector_store.count() == 0:
     )
 
 # -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+try:
+    HISTORY_WINDOW = int(os.getenv("HISTORY_WINDOW", "10"))
+except ValueError:
+    HISTORY_WINDOW = 10
+
+ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
+
+# -----------------------------------------------------------------------------
+# Schema init — safe to call repeatedly (CREATE TABLE IF NOT EXISTS)
+# -----------------------------------------------------------------------------
+init_db(_db_path())
+
+# -----------------------------------------------------------------------------
 # App
 # -----------------------------------------------------------------------------
 app = FastAPI(title="Asistente de Física 1")
@@ -49,15 +75,106 @@ class ChatRequest(BaseModel):
         max_length=500,
         description="Pregunta del estudiante de Física 1",
     )
+    student_name: str = Field(
+        ...,
+        min_length=1,
+        description="Display name typed by the student. Required — no anonymous chat.",
+    )
+
+
+def _student_id_by_name(display_name: str) -> int | None:
+    """Return the id for an existing student, or None if not yet created."""
+    with sqlite3.connect(_db_path()) as conn:
+        _configure_connection(conn)
+        row = conn.execute(
+            "SELECT id FROM students WHERE display_name = ?",
+            (display_name,),
+        ).fetchone()
+    return row[0] if row else None
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> StreamingResponse:
-    """Stream a RAG-grounded answer via Server-Sent Events."""
-    return StreamingResponse(
-        generate_response(req.query),
-        media_type="text/event-stream",
-    )
+    """Stream a RAG-grounded answer via Server-Sent Events.
+
+    Persists the user message before calling Groq, then accumulates the
+    assistant response and persists it on [DONE]. On unexpected failures an
+    error fallback message is stored as the assistant turn.
+    """
+    name = req.student_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="student_name cannot be empty")
+
+    student_id = get_or_create_student(name)
+    save_message(student_id, "user", req.query)
+    history = get_history(student_id, limit=HISTORY_WINDOW)
+
+    def event_generator():
+        buffer = ""
+        failed = False
+        try:
+            for token in generate_response(req.query, history=history):
+                yield token
+
+                if token.startswith("event: error"):
+                    failed = True
+                    continue
+
+                if token.startswith("data: "):
+                    payload = token[6:].removesuffix("\n\n")
+                    if payload == "[DONE]":
+                        if failed:
+                            save_message(student_id, "assistant", ERROR_FALLBACK)
+                        else:
+                            save_message(student_id, "assistant", buffer)
+                        return
+                    buffer += payload
+        except Exception:  # noqa: BLE001
+            save_message(student_id, "assistant", ERROR_FALLBACK)
+            yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/history")
+async def get_history_endpoint(student_name: str):
+    """Return all messages for a student, ordered by created_at ASC."""
+    name = student_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="student_name cannot be empty")
+
+    student_id = _student_id_by_name(name)
+    if student_id is None:
+        return {"messages": []}
+
+    messages = get_history(student_id)
+    return {"messages": messages}
+
+
+@app.delete("/messages/{message_id}")
+async def delete_message_endpoint(message_id: int, student_name: str):
+    """Delete a single message if it belongs to the requesting student."""
+    name = student_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="student_name cannot be empty")
+
+    with sqlite3.connect(_db_path()) as conn:
+        _configure_connection(conn)
+        message_row = conn.execute(
+            "SELECT student_id FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+
+    if message_row is None:
+        raise HTTPException(status_code=404, detail="message not found")
+
+    requester_id = _student_id_by_name(name)
+    if requester_id is None or message_row[0] != requester_id:
+        raise HTTPException(status_code=403, detail="not authorized")
+
+    delete_message(message_id, requester_id)
+    return {"deleted": True}
 
 
 # Serve the chat UI and its assets. Routes declared above take precedence;

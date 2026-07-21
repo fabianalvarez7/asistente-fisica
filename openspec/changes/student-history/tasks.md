@@ -80,14 +80,14 @@ Chain strategy: pending
 **Depends on**: Task 1, Task 2
 
 #### Acceptance criteria
-- [ ] `ChatRequest` model adds `student_name: str = Field(..., min_length=1)`
-- [ ] `POST /chat` validates `student_name.strip()` is non-empty → 400 if blank
-- [ ] `POST /chat` calls `get_or_create_student` → `save_message(user)` → `get_history(limit=HISTORY_WINDOW)` → `generate_response(query, chunks=None, history=history)` (retrieval stays inside chain)
-- [ ] `POST /chat` wraps the SSE generator: streams tokens to client while accumulating buffer; on `[DONE]` calls `save_message(assistant, buffer)`; on exception calls `save_message(assistant, ERROR_FALLBACK)`
-- [ ] `GET /history?student_name=...` returns `{"messages": [...]}` with full ordered history; returns `{"messages": []}` for unknown names; returns 422 if param missing
-- [ ] `DELETE /messages/{id}?student_name=...` returns 200 on success, 403 if message exists but belongs to another student, 404 if not found
-- [ ] `init_db()` called at module level during boot (after `load_dotenv()`)
-- [ ] `HISTORY_WINDOW` read from env with default `10`
+- [x] `ChatRequest` model adds `student_name: str = Field(..., min_length=1)`
+- [x] `POST /chat` validates `student_name.strip()` is non-empty → 400 if blank
+- [x] `POST /chat` calls `get_or_create_student` → `save_message(user)` → `get_history(limit=HISTORY_WINDOW)` → `generate_response(query, chunks=None, history=history)` (retrieval stays inside chain)
+- [x] `POST /chat` wraps the SSE generator: streams tokens to client while accumulating buffer; on `[DONE]` calls `save_message(assistant, buffer)`; on exception calls `save_message(assistant, ERROR_FALLBACK)`
+- [x] `GET /history?student_name=...` returns `{"messages": [...]}` with full ordered history; returns `{"messages": []}` for unknown names; returns 422 if param missing
+- [x] `DELETE /messages/{id}?student_name=...` returns 200 on success, 403 if message exists but belongs to another student, 404 if not found
+- [x] `init_db()` called at module level during boot (after `load_dotenv()`)
+- [x] `HISTORY_WINDOW` read from env with default `10`
 
 **Commit**: `feat(app): add student history endpoints and persistence lifecycle`
 **Verification**: `curl` each endpoint. Verify SQLite rows with `sqlite3 data/historial.db "SELECT * FROM messages"`. Test 403 by deleting another student's message.
