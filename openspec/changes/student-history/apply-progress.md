@@ -194,7 +194,8 @@ The frontend integration and full manual test plan will be covered by Tasks 4-6.
    unknown students without creating a row, and to distinguish 403 from 404 on
    `DELETE`, `app/main.py` performs small, read-only SELECTs against the same
    SQLite file using `rag.history._db_path()` and `_configure_connection()`.
-   All mutations still go through `rag/history.py`.
+   All mutations still go through `rag/history.py`. **RESOLVED** — see the
+   "Deviation Fix (post-Task 3)" section below.
 
 ## Blockers
 
@@ -231,6 +232,91 @@ No changes were made to:
 - `dashboard/`
 - `requirements.txt`
 - `.env.example` or `AGENTS.md`
+
+## Deviation Fix (post-Task 3)
+
+Approved by the user before Task 4. The original Task 3 implementation reached
+into `rag/history.py` private helpers (`_db_path`, `_configure_connection`) from
+`app/main.py`. This fix exposes the missing read operations as public functions
+and removes the private access.
+
+### Commits
+
+| SHA | Message |
+|-----|---------|
+| `ec021b0` | `feat(rag): add get_student_by_name and get_message_owner public read helpers` |
+| `48eac7e` | `refactor(app): use public read helpers from rag/history.py` |
+
+### Diff Summary
+
+| File | Action | Δ lines |
+|------|--------|---------|
+| `rag/history.py` | Modified | +37 / -1 |
+| `app/main.py` | Modified | +8 / -26 |
+| **Total** | | **+45 / -27** |
+
+### Before / After
+
+| Concern | Before (Task 3) | After (fix) |
+|---------|-----------------|-------------|
+| Unknown student → empty history | `app/main.py` called `rag.history._db_path()` + `_configure_connection()` + `SELECT id FROM students` via `_student_id_by_name()` | `app/main.py` calls public `rag.history.get_student_by_name(display_name)` |
+| DELETE 403 vs 404 | `app/main.py` called private helpers to `SELECT student_id FROM messages` | `app/main.py` calls public `rag.history.get_message_owner(message_id)` |
+| `init_db()` path | `app/main.py` called `init_db(_db_path())` | `init_db()` now accepts `db_path: str \| None = None` and defaults to `_db_path()` internally; `app/main.py` calls `init_db()` |
+| Private imports in `app/main.py` | `_db_path`, `_configure_connection` imported from `rag.history` | No underscore-prefixed symbols imported or called from `rag/history.py` |
+
+### Smell Resolution Verification
+
+```bash
+$ grep -nE '_(db_path|configure_connection|student_id_by_name)' app/main.py
+No underscore matches found in app/main.py
+```
+
+### Test Results
+
+#### New helper smoke test
+
+- **File**: `/tmp/test_history_read_helpers_smoke.py`
+- **Tests run**: 4 / 4
+- **Pass / fail**: 4 / 0
+- **Blocker**: none
+
+```text
+PASS: get_student_by_name('Ana') returns correct id (got 1)
+PASS: get_student_by_name('Ghost') returns None (got None)
+PASS: get_message_owner(message_id) returns correct student_id (got 1)
+PASS: get_message_owner(99999) returns None (got None)
+
+4/4 checks passed.
+```
+
+#### Task 3 regression smoke test
+
+- **File**: `/tmp/task3_smoke.py`
+- **Tests run**: 16 / 16
+- **Pass / fail**: 16 / 0
+- **Blocker**: none
+
+```text
+PASS: GET /history unknown student returns empty list
+PASS: POST /chat missing student_name returns 422
+PASS: POST /chat whitespace-only name returns 400
+PASS: POST /chat happy path streams SSE
+PASS: POST /chat persists user then assistant
+PASS: GET /history returns ordered history
+PASS: DELETE own message returns 200
+PASS: DELETE own message removes the targeted row
+PASS: DELETE another student's message returns 403
+PASS: DELETE 403 preserves the other student's row
+PASS: DELETE non-existent message returns 404
+PASS: Stream failure persists error fallback
+PASS: No-context fallback persisted
+PASS: HISTORY_WINDOW defaults to 10
+PASS: GET /history missing param returns 422
+PASS: DELETE missing student_name returns 422
+
+16/16 checks passed
+All Task 3 smoke checks passed.
+```
 
 ## Next Recommended
 
