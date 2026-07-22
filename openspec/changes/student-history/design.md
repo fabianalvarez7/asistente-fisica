@@ -396,7 +396,7 @@ HISTORY_WINDOW=10
 | 3 | History loaded on page load | Pre-seed "Ana" with 3 messages in SQLite. Reload page. | 3 messages rendered in chat UI before any new message. |
 | 4 | Multi-turn chat | Send "¿qué es la aceleración?". Then "¿y cómo se calcula?". | Second response references acceleration (the model saw the first turn). Verify via server console: the assembled messages list includes both prior turns. |
 | 5 | Delete own message | Click × on a user message. | Message disappears from UI. SQLite row removed. |
-| 6 | Delete assistant message | Click × on an assistant message. | Message disappears. Gap visible. |
+| 6 | Delete assistant message | Click × on an assistant message. | Message disappears. UI reflows (standard chat UX). DB row removed. |
 | 7 | Cross-student delete (403) | Open incognito → "Beto". Use browser dev tools to `DELETE /messages/42?student_name=Beto` where message 42 belongs to "Ana". | 403 response. Message 42 still in DB. |
 | 8 | Unknown name → empty history | Navigate to `GET /history?student_name=Nobody`. | 200 with `{"messages": []}`. |
 | 9 | Survive backend restart | Send 2 messages. Kill uvicorn. Relaunch. Reload page. | History still visible (durable in DB, not in-memory). |
