@@ -2,10 +2,11 @@
 
 ## Status
 
-**partial**
+**partial** (Test 6 in progress; one bug found and fixed mid-run)
 
-Tasks 1-5 are complete and verified. Task 6 remains pending and must be run
-manually in a browser by the user; it is not automated.
+Tasks 1-5 are complete and verified. Task 6 is the manual test run currently
+in progress; one bug was discovered during Test 4 and was fixed in this
+session (see "Bug Found During Verification" below).
 
 ## Branch
 
@@ -25,17 +26,19 @@ manually in a browser by the user; it is not automated.
 | `c56d840` | `feat(ui): add student name gate, history rendering, and message delete` |
 | `e9deb57` | `docs: document history window config and typed-name auth trade-offs` |
 | `8e49ee4` | `docs(apply): record Task 5 config and docs completion` |
+| TBD | `fix(rag): strip SQLite metadata from history before injecting into messages` |
+| TBD | `docs(apply): record Task 6 bug discovery and fix (SQLite metadata projection)` |
 
 ## Diff Summary
 
 | File | Action | Δ lines |
 |------|--------|---------|
 | `rag/history.py` | Created | +194 / -0 |
-| `rag/chain.py` | Modified | +25 / -6 |
+| `rag/chain.py` | Modified | +25 / -6 → +33 / -6 (after Task 6 fix) |
 | `app/main.py` | Modified | +124 / -7 |
 | `openspec/changes/student-history/tasks.md` | Modified | +8 / -8 |
-| `openspec/changes/student-history/apply-progress.md` | Modified | +185 / -0 |
-| **Total (review budget)** | | **+546 / -21** |
+| `openspec/changes/student-history/apply-progress.md` | Modified | +185 / -0 → +~250 / -0 (after Task 6 fix) |
+| **Total (review budget)** | | **+546 / -21 → +~600 / -21** |
 
 ## Tasks Completed
 
@@ -557,10 +560,34 @@ diff --git a/AGENTS.md b/AGENTS.md
 
 ## Deviations from Design
 
-None — the documentation matches the decisions and configuration described in
-`design.md`.
+- **Task 6 bug — `rag/chain.py` history projection** (fix applied this session):
+  `get_history()` returns dicts with `{id, role, content, created_at}` for the
+  persistence layer, but Groq's chat API rejects any extra fields per message
+  object (`BadRequestError: 'messages.3' : property 'created_at' is
+  unsupported`). The original Task 2 implementation did `messages.extend(history)`
+  directly, which broke every chat request that had prior history. Fix projects
+  each item to `{role, content}` before injection:
+  ```python
+  messages.extend(
+      {"role": m["role"], "content": m["content"]} for m in history
+  )
+  ```
+  The `id` and `created_at` fields remain in SQLite for the listing/delete
+  endpoints. The design.md "Test Plan" line that mentions the message list
+  shape did not anticipate this validation requirement.
+
+## Smoke Test Gap Discovered
+
+Task 2's smoke test (10/10 PASS) verified that history appeared in the
+assembled messages list (the dev-mode `[MSG NN]` dump shows the right shape),
+but it never sent the list to Groq. The bug was therefore invisible until a
+real chat request was made. **Follow-up for any future history-related work:**
+smoke tests for `generate_response` must include an actual LLM round-trip with
+a non-empty history list, not just a structural assertion on the messages
+list.
 
 ## Blockers
 
-None. Task 5 is complete. Task 6 (manual test run) is the remaining work.
+None. Task 6 is in progress; Test 4 was retried after the fix and is now
+producing real LLM responses with history injected.
 
