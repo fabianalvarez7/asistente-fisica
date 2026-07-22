@@ -1,43 +1,20 @@
 """PDF loader: convierte PDFs a Markdown para indexar en ChromaDB.
 
-Usa marker-pdf (datalab) con OCR + extracción de fórmulas en LaTeX.
-Decisión arquitectónica documentada en docs/adr/0001-pdf-loader-marker.md.
+Usa pymupdf4llm (PyMuPDF) porque es rápido y el cuadernillo del curso es
+suficientemente limpio para indexar. marker-pdf sigue en requirements.txt
+como plan B si Nair necesita mayor fidelidad de fórmulas en LaTeX en el
+futuro, pero el cambio de carga de marker a PyMuPDF fue necesario porque
+marker-pdf se colgó al 96 %% del cuadernillo después de ~20 min.
 
-Trade-off conocido: marker es ~5-10x más lento que pymupdf4llm,
-pero rescata fórmulas en LaTeX que de otro modo se perderían.
-Los modelos (surya, texify) se descargan en el primer uso (~3GB)
-y se cachean en ~/Library/Caches/datalab/models/.
-
-Para un corpus de 5-10 páginas, la primera indexación tarda ~10 min
-en Mac con MPS. Re-indexaciones son infrecuentes (solo cuando cambia
-el material).
+Decisión documentada en docs/adr/0001-pdf-loader-marker.md (actualizar si se
+estabiliza el loader definitivo).
 """
 
 from pathlib import Path
 from typing import Union
 
+import pymupdf4llm
 from langchain_core.documents import Document
-from marker.converters.pdf import PdfConverter
-from marker.models import create_model_dict
-
-# Singleton: los modelos son pesados (~3GB en memoria).
-# No los recargamos en cada llamada a load_pdf().
-_CONVERTER: PdfConverter | None = None
-
-
-def _get_converter() -> PdfConverter:
-    """Devuelve el converter de marker, creándolo la primera vez."""
-    global _CONVERTER
-    if _CONVERTER is None:
-        artifact_dict = create_model_dict()
-        _CONVERTER = PdfConverter(
-            artifact_dict=artifact_dict,
-            config={
-                "output_format": "markdown",
-                "disable_image_extraction": True,
-            },
-        )
-    return _CONVERTER
 
 
 def load_pdf(path: Union[str, Path]) -> list[Document]:
@@ -45,24 +22,21 @@ def load_pdf(path: Union[str, Path]) -> list[Document]:
 
     Por simplicidad, no partimos por página: el chunker en
     rag/splitters/ se encarga de partir el markdown después con su
-    propia estrategia. Si en el futuro hace falta saber la página
-    exacta de cada chunk, agregar paginate_output=True y partir por
-    el separador que produce marker.
+    propia estrategia.
 
     Args:
         path: Ruta al archivo PDF.
 
     Returns:
         Lista con un único Document:
-          - page_content: markdown del PDF completo (con LaTeX para fórmulas)
+          - page_content: markdown del PDF completo
           - metadata: { 'source': str(path) }
     """
     path = Path(path)
-    converter = _get_converter()
-    rendered = converter(str(path))
+    markdown = pymupdf4llm.to_markdown(str(path))
     return [
         Document(
-            page_content=rendered.markdown,
+            page_content=markdown,
             metadata={"source": str(path)},
         )
     ]

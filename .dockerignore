@@ -1,0 +1,57 @@
+# Build context exclusions. HF Spaces builds from the Space repo (no .venv
+# or local dev artifacts), but a local `docker build .` would otherwise copy
+# 1.5 GB of .venv/ into the build context. Mirror of .gitignore plus a few
+# deploy-specific exclusions.
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python build/cache artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Dev data (ChromaDB, SQLite, source PDFs) — never baked into image
+data/
+material-fisica/
+
+# HF embedding model. The Dockerfile downloads it at build time
+# (HF Spaces LFS free tier caps at 100 MB; this model is 448 MB).
+# The local dev may have it under rag/index/hf-model/ — exclude it
+# from the build context so we never bake a stale local copy.
+rag/index/hf-model/
+
+# IDEs / editors / OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# OpenCode / orchestrator local caches
+.atl/
+.Rhistory
+*.ipynb
+.ipynb_checkpoints/
+
+# Streamlit / Jupyter
+.streamlit/secrets.toml
+
+# Git internals
+.git/
+.gitignore
+.gitattributes

@@ -11,6 +11,14 @@ load_dotenv()
 import os
 
 from fastapi import FastAPI, HTTPException
+
+# Load .env into os.environ BEFORE any module that reads env at import time.
+# rag.chain creates an OpenAI client at module load with
+# os.getenv("GROQ_API_KEY", "") — if .env is loaded AFTER that import, the
+# client is built with api_key="" and Groq rejects requests with 401.
+# HF Spaces injects env vars directly (no .env file), so this only affects
+# local dev.
+load_dotenv()
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field

@@ -1,3 +1,13 @@
+---
+title: Asistente de Física 1
+emoji: 🧲
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Asistente de Física
 
 > Asistente Socrático de chat para estudiantes de **Física 1** (UNR). El asistente guía con preguntas; nunca resuelve el ejercicio. Las respuestas se generan exclusivamente desde los PDFs de la materia.
@@ -9,13 +19,13 @@
 | Backend | FastAPI (semana 3-4) |
 | RAG | LangChain como toolbox + orquestación propia en `rag/` |
 | Vector store | ChromaDB (persistente, local) |
-| PDF loader | marker-pdf (con OCR + LaTeX) |
+| PDF loader | pymupdf4llm (rápido, suficiente para el cuadernillo) |
 | Embeddings | `intfloat/multilingual-e5-small` (local, MPS/CUDA/CPU) |
 | LLM | Groq (API) |
 | Persistencia | SQLite (semana 5-6) |
 | Frontend chat | HTML + JS plano (semana 3-4) |
 | Frontend dashboard | Streamlit (mes 3, opcional) |
-| Deploy | Render free tier |
+| Deploy | Hugging Face Spaces Docker (free cpu-basic) |
 
 Decisiones de arquitectura y no-negociables del proyecto: ver `AGENTS.md`.
 
@@ -23,7 +33,7 @@ Decisiones de arquitectura y no-negociables del proyecto: ver `AGENTS.md`.
 
 - **Python 3.11+** (probado con 3.12)
 - **macOS** (Apple Silicon) o **Windows** con NVIDIA GPU, o **Linux** (CPU)
-- **~3 GB de disco libre** para los modelos de marker-pdf (se cachean en `~/Library/Caches/datalab/models/` en macOS)
+- **~600 MB de disco libre** para el modelo de embeddings `intfloat/multilingual-e5-small` (ya viene pre-bakeado en `rag/index/hf-model/`, LFS-tracked)
 - **Una API key de Groq** (gratis) en https://console.groq.com
 
 ## Setup
@@ -61,7 +71,7 @@ asistente-fisica/
 ├── app/                 # FastAPI backend (semana 3-4)
 ├── dashboard/           # Streamlit (mes 3, opcional)
 ├── rag/                 # Lógica de RAG
-│   ├── loaders/         # PDF → Markdown (marker-pdf)
+│   ├── loaders/         # PDF → Markdown (pymupdf4llm)
 │   ├── splitters/       # Chunking (RecursiveCharacterTextSplitter)
 │   ├── retrievers/      # Embeddings + ChromaDB
 │   ├── prompts/         # System prompts (mes 2)
