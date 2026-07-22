@@ -26,8 +26,8 @@ session (see "Bug Found During Verification" below).
 | `c56d840` | `feat(ui): add student name gate, history rendering, and message delete` |
 | `e9deb57` | `docs: document history window config and typed-name auth trade-offs` |
 | `8e49ee4` | `docs(apply): record Task 5 config and docs completion` |
-| TBD | `fix(rag): strip SQLite metadata from history before injecting into messages` |
-| TBD | `docs(apply): record Task 6 bug discovery and fix (SQLite metadata projection)` |
+| `bc683ce` | `fix(rag): strip SQLite metadata from history before injecting into messages` |
+| `6d2ab50` | `docs(apply): record Task 6 bug discovery and fix (SQLite metadata projection)` |
 
 ## Diff Summary
 
