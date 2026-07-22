@@ -177,7 +177,7 @@ def get_history(student_id: int, limit: int | None = None) -> list[dict]:
 
     Each element is a dict with keys ``id``, ``role``, ``content`` and
     ``created_at``. If ``limit`` is provided, only the last ``limit`` messages
-    are returned, but they remain ordered chronically (oldest of the slice
+    are returned, but they remain ordered chronologically (oldest of the slice
     first). An empty list is returned when the student has no messages.
     """
     db = _db_path()
