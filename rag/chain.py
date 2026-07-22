@@ -90,11 +90,17 @@ def _build_context(documents: list) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def generate_response(query: str) -> Generator[str, None, None]:
+def generate_response(
+    query: str,
+    history: list[dict] | None = None,
+) -> Generator[str, None, None]:
     """Orchestrate RAG pipeline and stream Groq tokens as SSE frames.
 
     Input contract:
       - query: non-empty str, max 500 chars (validated by FastAPI).
+      - history: optional list of {"role": ..., "content": ...} dicts from
+        SQLite, ordered chronologically. Injected between _FEW_SHOT and the
+        current query. None or [] means single-turn (no history).
       - GROQ_API_KEY is assumed present (guaranteed by app/main.py boot check).
       - ChromaDB collection is assumed non-empty (guaranteed by app/main.py).
 
@@ -125,14 +131,30 @@ def generate_response(query: str) -> Generator[str, None, None]:
         context = _build_context(documents)
         prompt = SYSTEM_PROMPT.format(context=context)
 
+        messages = [
+            {"role": "system", "content": prompt},
+            *_FEW_SHOT,
+        ]
+        if history:
+            # Project to {role, content} only: get_history() returns SQLite
+            # rows that include `id` and `created_at` for the persistence layer,
+            # but Groq's chat API rejects any extra fields per message object.
+            messages.extend(
+                {"role": m["role"], "content": m["content"]} for m in history
+            )
+        messages.append({"role": "user", "content": query})
+
+        if not os.getenv("PRODUCTION"):
+            # Manual review gate: dump assembled message list for eyeball verification.
+            for i, msg in enumerate(messages):
+                role = msg["role"]
+                preview = msg["content"][:80].replace("\n", " ")
+                print(f"[MSG {i:02d}] {role:9s} | {preview}...")
+
         model = os.getenv("LLM_MODEL", _DEFAULT_MODEL)
         stream = _OPENAI_CLIENT.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": prompt},
-                *_FEW_SHOT,
-                {"role": "user", "content": query},
-            ],
+            messages=messages,
             stream=True,
             temperature=0.0,
         )

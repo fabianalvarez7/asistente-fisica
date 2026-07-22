@@ -17,6 +17,18 @@
 
     <ul id="messages" class="messages" aria-live="polite"></ul>
 
+    <div id="name-area" class="name-area">
+      <input
+        id="student-name"
+        type="text"
+        autocomplete="off"
+        maxlength="100"
+        placeholder="Escribí tu nombre para empezar..."
+        aria-label="Nombre"
+      />
+      <button type="button" id="name-submit">Entrar</button>
+    </div>
+
     <form id="chat-form" class="input-area">
       <input
         id="query"
@@ -26,8 +38,9 @@
         maxlength="500"
         placeholder="Escribí tu pregunta de Física 1..."
         aria-label="Pregunta"
+        disabled
       />
-      <button type="submit" id="send-btn">Enviar</button>
+      <button type="submit" id="send-btn" disabled>Enviar</button>
     </form>
 
     <div id="hint" class="hint" role="status" aria-live="assertive"></div>

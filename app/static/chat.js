@@ -18,9 +18,14 @@ const input = document.getElementById('query');
 const messages = document.getElementById('messages');
 const hint = document.getElementById('hint');
 const sendBtn = document.getElementById('send-btn');
+const nameArea = document.getElementById('name-area');
+const nameInput = document.getElementById('student-name');
+const nameSubmit = document.getElementById('name-submit');
 
 const MAX_CHARS = 500;
+const STORAGE_KEY = 'student_name';
 const FALLBACK_ERROR = 'Ocurrió un error, intentá de nuevo';
+let studentName = localStorage.getItem(STORAGE_KEY);
 
 /**
  * Render LaTeX math in an element using KaTeX auto-render.
@@ -61,29 +66,54 @@ function clearHint() {
   hint.textContent = '';
 }
 
-function appendUserMessage(text) {
+function createMessageElement(role) {
   const li = document.createElement('li');
-  li.className = 'message user';
+  li.className = `message ${role}`;
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.textContent = text;
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'delete-btn';
+  deleteBtn.setAttribute('aria-label', 'Eliminar mensaje');
+  deleteBtn.textContent = '×';
+  const content = document.createElement('span');
+  content.className = 'bubble-content';
+  bubble.appendChild(deleteBtn);
+  bubble.appendChild(content);
   li.appendChild(bubble);
+  return { li, bubble, content, deleteBtn };
+}
+
+function renderMessage(msg) {
+  const { li, bubble, content, deleteBtn } = createMessageElement(msg.role);
+  if (msg.id != null) {
+    deleteBtn.dataset.messageId = msg.id;
+  } else {
+    deleteBtn.disabled = true;
+  }
+  content.textContent = msg.content;
   messages.appendChild(li);
+  if (msg.role === 'assistant') {
+    renderMathInBubble(bubble);
+  }
   messages.scrollTop = messages.scrollHeight;
+  return li;
+}
+
+function appendUserMessage(text) {
+  return renderMessage({ role: 'user', content: text });
 }
 
 function appendAssistantPlaceholder() {
-  const li = document.createElement('li');
-  li.className = 'message assistant loading';
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  li.appendChild(bubble);
+  const { li, bubble, content, deleteBtn } = createMessageElement('assistant');
+  li.classList.add('loading');
+  deleteBtn.disabled = true;
   messages.appendChild(li);
   messages.scrollTop = messages.scrollHeight;
-  return { li, bubble };
+  return { li, bubble, content, deleteBtn };
 }
 
-function processFrame(frame, elements) {
+function processFrame(frame, assistant, userLi) {
   const lines = frame.split('\n');
   let eventName = null;
   let dataValue = null;
@@ -97,34 +127,49 @@ function processFrame(frame, elements) {
   }
 
   if (eventName === 'error') {
-    elements.li.classList.remove('loading');
-    elements.bubble.textContent = FALLBACK_ERROR;
+    assistant.li.classList.remove('loading');
+    assistant.content.textContent = FALLBACK_ERROR;
+    return;
+  }
+
+  if (eventName === 'user_message_id' && userLi) {
+    const deleteBtn = userLi.querySelector('.delete-btn');
+    if (deleteBtn) {
+      deleteBtn.dataset.messageId = dataValue;
+      deleteBtn.disabled = false;
+    }
+    return;
+  }
+
+  if (eventName === 'assistant_message_id' && assistant) {
+    assistant.deleteBtn.dataset.messageId = dataValue;
+    assistant.deleteBtn.disabled = false;
     return;
   }
 
   if (dataValue === '[DONE]') {
-    elements.li.classList.remove('loading');
-    renderMathInBubble(elements.bubble);
+    assistant.li.classList.remove('loading');
+    renderMathInBubble(assistant.bubble);
     return;
   }
 
   if (dataValue !== null) {
-    elements.li.classList.remove('loading');
-    elements.bubble.textContent += dataValue;
+    assistant.li.classList.remove('loading');
+    assistant.content.textContent += dataValue;
   }
 }
 
 async function sendMessage(query) {
   setLoading(true);
   clearHint();
-  appendUserMessage(query);
-  const elements = appendAssistantPlaceholder();
+  const userLi = appendUserMessage(query);
+  const assistant = appendAssistantPlaceholder();
 
   try {
     const response = await fetch('/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, student_name: studentName }),
     });
 
     if (!response.ok) {
@@ -151,7 +196,7 @@ async function sendMessage(query) {
       while ((boundary = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
-        processFrame(frame, elements);
+        processFrame(frame, assistant, userLi);
       }
     }
 
@@ -163,17 +208,79 @@ async function sendMessage(query) {
       while ((boundary = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
-        processFrame(frame, elements);
+        processFrame(frame, assistant, userLi);
       }
     }
   } catch (err) {
-    elements.li.classList.remove('loading');
-    elements.bubble.textContent = FALLBACK_ERROR;
+    assistant.li.classList.remove('loading');
+    assistant.content.textContent = FALLBACK_ERROR;
   } finally {
     setLoading(false);
     input.focus();
   }
 }
+
+function setChatEnabled(enabled) {
+  input.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+}
+
+function startChat(name) {
+  studentName = name;
+  localStorage.setItem(STORAGE_KEY, name);
+  nameArea.style.display = 'none';
+  setChatEnabled(true);
+  loadHistory();
+}
+
+function handleNameSubmit() {
+  const name = nameInput.value.trim();
+  if (!name) {
+    showHint('Escribí tu nombre para empezar');
+    return;
+  }
+  clearHint();
+  startChat(name);
+}
+
+async function loadHistory() {
+  if (!studentName) return;
+  messages.innerHTML = '';
+  try {
+    const resp = await fetch(`/history?student_name=${encodeURIComponent(studentName)}`);
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    for (const msg of data.messages) {
+      renderMessage(msg);
+    }
+  } catch (err) {
+    showHint('No se pudo cargar el historial');
+  }
+}
+
+nameSubmit.addEventListener('click', handleNameSubmit);
+nameInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    handleNameSubmit();
+  }
+});
+
+messages.addEventListener('click', async (event) => {
+  const deleteBtn = event.target.closest('.delete-btn');
+  if (!deleteBtn) return;
+  const messageId = deleteBtn.dataset.messageId;
+  if (!messageId || !studentName) return;
+  const resp = await fetch(
+    `/messages/${messageId}?student_name=${encodeURIComponent(studentName)}`,
+    { method: 'DELETE' }
+  );
+  if (resp.ok) {
+    deleteBtn.closest('.message').remove();
+  }
+  // 403/404 are silently ignored so the UI stays consistent.
+});
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -192,3 +299,11 @@ form.addEventListener('submit', (event) => {
   input.value = '';
   sendMessage(query);
 });
+
+if (studentName) {
+  nameArea.style.display = 'none';
+  setChatEnabled(true);
+  loadHistory();
+} else {
+  setChatEnabled(false);
+}
