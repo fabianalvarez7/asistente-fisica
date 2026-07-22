@@ -136,7 +136,12 @@ def generate_response(
             *_FEW_SHOT,
         ]
         if history:
-            messages.extend(history)
+            # Project to {role, content} only: get_history() returns SQLite
+            # rows that include `id` and `created_at` for the persistence layer,
+            # but Groq's chat API rejects any extra fields per message object.
+            messages.extend(
+                {"role": m["role"], "content": m["content"]} for m in history
+            )
         messages.append({"role": "user", "content": query})
 
         if not os.getenv("PRODUCTION"):
