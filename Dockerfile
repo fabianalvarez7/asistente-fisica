@@ -43,6 +43,13 @@ ENV OMP_NUM_THREADS=1
 ENV TOKENIZERS_PARALLELISM=false
 ENV LLM_MODEL=llama-3.3-70b-versatile
 
+# SQLite history dir: .dockerignore excludes data/ from the build context, so
+# the dir is missing in the image. /app itself is owned by root with 0755
+# (Docker WORKDIR default), so the runtime UID 1000 cannot create /app/data
+# at boot. Pre-create it here with the right owner. The DB file itself is
+# ephemeral (HF Spaces wipes disk on sleep) — accepted per AGENTS.md §7.12.
+RUN mkdir -p /app/data && chown user:user /app/data
+
 USER user
 
 # Port 7860 is HF Spaces' default app_port. Must match README YAML.
