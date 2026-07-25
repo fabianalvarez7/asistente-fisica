@@ -1,0 +1,20 @@
+flowchart TD
+    A([Abre la app]) --> B{¿Nombre en localStorage?}
+    B -- No --> C[Identificación: input + Entrar]
+    B -- Sí --> E[Chat: cargar historial del backend]
+    C -- Escribe nombre + Enter --> D[Guarda nombre en localStorage + SQLite]
+    D --> E
+    E --> F{¿Hay historial?}
+    F -- Sí --> G[Chat con mensajes previos]
+    F -- No --> H[Chat vacío]
+    G --> I[Escribir pregunta]
+    H --> I
+    I -- Tipea + Enter/Enviar --> J[Enviar: POST /chat]
+    J --> K[Stream SSE]
+    K -- token --> L[Asistente crece]
+    L -- más tokens --> L
+    L -- "data: [DONE]" --> I
+    J -- "error de red / 4xx / 5xx" --> M[Fallback en el mensaje asistente]
+    M --> I
+    G -- Click × --> N["DELETE /messages/{id}"]
+    N -- OK --> G

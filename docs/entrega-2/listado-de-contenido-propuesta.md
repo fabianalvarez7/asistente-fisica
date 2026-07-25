@@ -53,10 +53,27 @@ de la página del chat.
 
 ## Mapa de navegación
 
-> Pendiente. Próxima sección a desarrollar. Referencia metodológica: pp. 110-114
-> de *Experiencia de Usuario: Principios y Métodos* (Hassan Montero) y Fase 2
-> de la *Guía práctica de Arquitectura de Información para aplicaciones
-> multimedia educativas* (Arencibia Cobas et al.).
+![Mapa de navegación del chat del estudiante](mapa-navegacion.png)
+
+> Fuente: [`mapa-navegacion.mmd`](mapa-navegacion.mmd) (Mermaid, regenerable
+> con `npx -p @mermaid-js/mermaid-cli mmdc -i mapa-navegacion.mmd -o mapa-navegacion.png`).
+>
+> El diagrama cubre el recorrido completo del estudiante en el chat:
+> **identificación** (con y sin nombre guardado en `localStorage`) → **carga
+> del historial** (con y sin mensajes previos) → **loop de pregunta** (POST
+> `/chat` con stream SSE, estado "Cargando…", fin con `data: [DONE]`) → **borrado
+> de mensajes** (`DELETE /messages/{id}` con check de ownership por nombre) →
+> **fallback de error** (red, 4xx, 5xx: el contenido del mensaje asistente se
+> reemplaza por el mensaje de fallback y el input vuelve a estar disponible).
+>
+> **Lo que el diagrama NO muestra** (está en las secciones anteriores como
+> limitación explícita): logout, re-identificación sin recargar la página,
+> validación contra nombres duplicados preexistentes en SQLite (ver §1 y §3),
+> render de LaTeX dentro del mensaje asistente (ver §3).
+>
+> Referencia metodológica: pp. 110-114 de *Experiencia de Usuario: Principios
+> y Métodos* (Hassan Montero) y Fase 2 de *Guía práctica de Arquitectura de
+> Información para aplicaciones multimedia educativas* (Arencibia Cobas et al.).
 
 ## Contenidos visuales / gráficos (a coordinar con el diseñador)
 
