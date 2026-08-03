@@ -1,15 +1,10 @@
 # Listado de Contenido — Entrega 2 (Sección 1)
 
-> Documento de trabajo para la Entrega 2 (Primer Avance: Maquetación del Prototipo).
-> Sección 1: Listado de Contenido.
-> Estado: borrador inicial. Última actualización: 2026-07-25.
+**Documento de trabajo** para la Entrega 2 (Primer Avance: Maquetación del Prototipo). **Sección 1:** Listado de Contenido. **Estado:** borrador inicial. **Última actualización:** 2026-07-26.
 
 ## Áreas del prototipo
 
-El prototipo a entregar en esta etapa cubre únicamente el chat del estudiante
-(el dashboard de Streamlit queda fuera de alcance de esta entrega). A los fines
-del listado, "área" refiere a una sección visual con interacción propia dentro
-de la página del chat.
+El prototipo a entregar en esta etapa cubre únicamente el chat del estudiante (el dashboard de Streamlit queda fuera de alcance de esta entrega). A los fines del listado, "área" refiere a una sección visual con interacción propia dentro de la página del chat.
 
 ### 1. Identificación del estudiante
 
@@ -55,34 +50,20 @@ de la página del chat.
 
 ![Mapa de navegación del chat del estudiante](mapa-navegacion.png)
 
-> Fuente: [`mapa-navegacion.mmd`](mapa-navegacion.mmd) (Mermaid, regenerable
-> con `npx -p @mermaid-js/mermaid-cli mmdc -i mapa-navegacion.mmd -o mapa-navegacion.png`).
->
-> El diagrama cubre el recorrido completo del estudiante en el chat:
-> **identificación** (con y sin nombre guardado en `localStorage`) → **carga
-> del historial** (con y sin mensajes previos) → **loop de pregunta** (POST
-> `/chat` con stream SSE, estado "Cargando…", fin con `data: [DONE]`) → **borrado
-> de mensajes** (`DELETE /messages/{id}` con check de ownership por nombre) →
-> **fallback de error** (red, 4xx, 5xx: el contenido del mensaje asistente se
-> reemplaza por el mensaje de fallback y el input vuelve a estar disponible).
->
-> **Lo que el diagrama NO muestra** (está en las secciones anteriores como
-> limitación explícita): logout, re-identificación sin recargar la página,
-> validación contra nombres duplicados preexistentes en SQLite (ver §1 y §3),
-> render de LaTeX dentro del mensaje asistente (ver §3).
->
-> Referencia metodológica: pp. 110-114 de *Experiencia de Usuario: Principios
-> y Métodos* (Hassan Montero) y Fase 2 de *Guía práctica de Arquitectura de
-> Información para aplicaciones multimedia educativas* (Arencibia Cobas et al.).
+**Fuente:** [`mapa-navegacion.mmd`](mapa-navegacion.mmd) (Mermaid, regenerable con `npx -p @mermaid-js/mermaid-cli mmdc -i mapa-navegacion.mmd -o mapa-navegacion.png`).
+
+**El diagrama cubre el recorrido completo del estudiante en el chat:** **identificación** (con y sin nombre guardado en `localStorage`) → **carga del historial** (con y sin mensajes previos) → **loop de pregunta** (POST `/chat` con stream SSE, estado "Cargando…", fin con `data: [DONE]`) → **borrado de mensajes** (`DELETE /messages/{id}` con check de ownership por nombre) → **fallback de error** (red, 4xx, 5xx: el contenido del mensaje asistente se reemplaza por el mensaje de fallback y el input vuelve a estar disponible).
+
+**Lo que el diagrama NO muestra** (está en las secciones anteriores como limitación explícita): logout, re-identificación sin recargar la página, validación contra nombres duplicados preexistentes en SQLite (ver §1 y §3), render de LaTeX dentro del mensaje asistente (ver §3).
+
+**Referencia metodológica:** pp. 110-114 de *Experiencia de Usuario: Principios y Métodos* (Hassan Montero) y Fase 2 de *Guía práctica de Arquitectura de Información para aplicaciones multimedia educativas* (Arencibia Cobas et al.).
 
 ## Contenidos visuales / gráficos (a coordinar con el diseñador)
 
-> Pendiente. Esta lista se completará en función de lo que defina el diseñador
-> en la sección 2 de la entrega (Modelos de Diseño). Los candidatos a assets
-> que el chat necesitaría, a confirmar:
->
-> - Logo / isotipo / isologo del proyecto (cabecera).
-> - Avatar del asistente (opcional, área de conversación).
-> - Ilustración o ícono para el estado de "pensando / cargando".
-> - Paleta de colores (reemplaza el azul actual `#0f4c81`).
-> - Tipografía (reemplaza la `system-ui` actual).
+**Pendiente.** Esta lista se completará en función de lo que defina el diseñador en la sección 2 de la entrega (Modelos de Diseño). Los candidatos a assets que el chat necesitaría, a confirmar:
+
+- Logo / isotipo / isologo del proyecto (cabecera).
+- Avatar del asistente (opcional, área de conversación).
+- Ilustración o ícono para el estado de "pensando / cargando".
+- Paleta de colores (reemplaza el azul actual `#0f4c81`).
+- Tipografía (reemplaza la `system-ui` actual).
