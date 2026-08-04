@@ -3,18 +3,15 @@ langchain>=0.3
 langchain-community>=0.3
 chromadb==1.5.9
 sentence-transformers>=3.0
-pymupdf4llm>=0.0.10
+
+# PDF OCR with LaTeX formula extraction — primary loader.
+# Supersedes docs/adr/0001-pdf-loader-marker.md via the marker-pdf-loader change.
+marker-pdf>=1.10
 
 # Chat transport
 fastapi
 uvicorn[standard]
 openai
-
-# PDF OCR con extracción de fórmulas (markdown + LaTeX) — PLAN B, no instalado
-# Decisión original en docs/adr/0001-pdf-loader-marker.md (SUPERSEDED).
-# Mantenerlo comentado: si pymupdf4llm pierde fórmulas en un corpus futuro,
-# descomentar y reinstalar localmente para re-evaluar. No entra al runtime image.
-# marker-pdf>=1.0
 
 # Embeddings — torch se declara explícito para tener control de versión
 # (MPS en Mac Apple Silicon, CUDA en Windows con GPU NVIDIA)
