@@ -1,39 +1,51 @@
-"""PDF loader: convierte PDFs a Markdown para indexar en ChromaDB.
+"""PDF loader: converts PDFs to Markdown for ChromaDB indexing.
 
-Usa pymupdf4llm (PyMuPDF) porque es rápido y el cuadernillo del curso es
-suficientemente limpio para indexar. marker-pdf sigue en requirements.txt
-como plan B si Nair necesita mayor fidelidad de fórmulas en LaTeX en el
-futuro, pero el cambio de carga de marker a PyMuPDF fue necesario porque
-marker-pdf se colgó al 96 %% del cuadernillo después de ~20 min.
+Uses marker-pdf for LaTeX formula extraction. The PdfConverter and its
+model dictionary are loaded once as a module-level singleton so the
+multi-minute model warmup is amortized across all PDFs in a re-bake.
 
-Decisión documentada en docs/adr/0001-pdf-loader-marker.md (actualizar si se
-estabiliza el loader definitivo).
+See docs/adr/0001-pdf-loader-marker.md for historical context and the
+marker-pdf-loader change proposal for the current rationale.
 """
 
 from pathlib import Path
 from typing import Union
 
-import pymupdf4llm
 from langchain_core.documents import Document
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+
+_CONVERTER: PdfConverter | None = None
+
+
+def _get_converter() -> PdfConverter:
+    """Return a cached PdfConverter, creating it on first call."""
+    global _CONVERTER
+    if _CONVERTER is None:
+        _CONVERTER = PdfConverter(
+            artifact_dict=create_model_dict(),
+            config={"disable_image_extraction": True},
+        )
+    return _CONVERTER
 
 
 def load_pdf(path: Union[str, Path]) -> list[Document]:
-    """Lee un PDF y devuelve un único Document con todo el markdown.
+    """Read a PDF and return a single Document with the full markdown.
 
-    Por simplicidad, no partimos por página: el chunker en
-    rag/splitters/ se encarga de partir el markdown después con su
-    propia estrategia.
+    The chunker in rag/splitters/ handles splitting the markdown later.
 
     Args:
-        path: Ruta al archivo PDF.
+        path: Path to the PDF file.
 
     Returns:
-        Lista con un único Document:
-          - page_content: markdown del PDF completo
-          - metadata: { 'source': str(path) }
+        A list with exactly one Document:
+          - page_content: marker-pdf rendered markdown (text + LaTeX)
+          - metadata: {"source": str(path)}
     """
     path = Path(path)
-    markdown = pymupdf4llm.to_markdown(str(path))
+    converter = _get_converter()
+    result = converter(str(path))
+    markdown = result.markdown
     return [
         Document(
             page_content=markdown,
@@ -43,13 +55,13 @@ def load_pdf(path: Union[str, Path]) -> list[Document]:
 
 
 def load_pdfs(paths: list[Union[str, Path]]) -> list[Document]:
-    """Lee varios PDFs y concatena los Documents resultantes.
+    """Read multiple PDFs and concatenate the resulting Documents.
 
     Args:
-        paths: Lista de rutas a archivos PDF.
+        paths: List of PDF file paths.
 
     Returns:
-        Lista de Documents, uno por PDF.
+        A list of Documents, one per PDF.
     """
     documents = []
     for path in paths:
