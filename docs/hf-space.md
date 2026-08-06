@@ -24,6 +24,8 @@ El Space es un repo separado del repo de GitHub. Solo necesita estos archivos:
 ```
 
 > El modelo de embeddings **no se copia** al repo del Space. El Dockerfile lo descarga en build time usando `scripts/preparar_indice_hf.py`. Trackearlo vía Git LFS no es viable: GitHub LFS free tier limita archivos a 100 MB y el modelo pesa 448 MB.
+>
+> Los modelos de marker-pdf/surya (~3.5 GB) **tampoco se copian**. El Dockerfile los descarga en build time mediante `create_model_dict()` y `MODEL_CACHE_DIR`. Ver "Re-bakear el corpus" abajo.
 
 ## Plantilla de README.md para el Space
 
@@ -73,16 +75,27 @@ Funciona con RAG (ChromaDB + multilingual-e5-small) y Groq (LLM).
 
 ## Re-bakear el corpus
 
-Cuando cambie el PDF o los parámetros de chunking:
+Cuando cambie el corpus (PDFs o parámetros de chunking), regenerar el índice desde cero:
 
 ```bash
-python scripts/indexar_pdfs.py --reset --pdf data/pdfs/cuadernillo-fisica-1.pdf
+# 1. Re-indexar los 5 PDFs canónicos (tarda ~5-7 h en Mac MPS; es normal).
+python scripts/indexar_pdfs.py --reset
+
+# 2. Verificar que marker-pdf recuperó fórmulas en LaTeX antes de seguir.
+python scripts/verify_latex.py
+
+# 3. Copiar el índice local al artefacto bakeado que se commitea.
 rm -rf rag/index/chroma && cp -r data/chroma rag/index/chroma/
+
+# 4. Commitear y subir.
 git add rag/index/chroma/
-git commit -m "chore(data): rebake chroma index"
+git commit -m "chore(data): rebake chroma index (marker-pdf, 5 PDFs)"
+git push
 ```
 
 Luego volver a copiar `rag/index/chroma/` al repo del Space y hacer push.
+
+> Los modelos de marker-pdf se hornean en la imagen de Docker (no en el repo) mediante `create_model_dict()` durante el build. Esto evita que el Space los descargue en cada cold-start, manteniendo el primer request dentro del presupuesto de ~20-40 s.
 
 ## Variables y secretos
 
@@ -92,6 +105,8 @@ Luego volver a copiar `rag/index/chroma/` al repo del Space y hacer push.
 | `CHROMA_PERSIST_DIR` | `Dockerfile` ENV | `./rag/index/chroma` en el Space. |
 | `HF_HOME` | `Dockerfile` ENV | `./rag/index/hf-model`. |
 | `SENTENCE_TRANSFORMERS_HOME` | `Dockerfile` ENV | Igual que `HF_HOME`. |
+| `MODEL_CACHE_DIR` | `Dockerfile` ENV | `./rag/index/marker-models` (modelos de marker-pdf/surya). |
+| `TORCH_DEVICE_MODEL` | `Dockerfile` ENV | `cpu` en el Space; las Mac/Windows usan auto. |
 | `LLM_MODEL` | `Dockerfile` ENV | `llama-3.3-70b-versatile`. |
 | `OMP_NUM_THREADS` | `Dockerfile` ENV | `1` para no saturar la CPU. |
 | `TOKENIZERS_PARALLELISM` | `Dockerfile` ENV | `false` para estabilidad de memoria. |
