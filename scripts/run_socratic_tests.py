@@ -157,5 +157,41 @@ def main() -> None:
     print(f"\nResults written to {output_path}")
 
 
+def test_formula_retrieval() -> bool:
+    """Smoke test: a formula query should retrieve chunks that contain LaTeX.
+
+    Uses the ChromaDB retriever directly so the assertion inspects retrieved
+    context, not the LLM response. This test is intentionally non-fatal: a
+    failure is reported but the script continues, so the rest of the socratic
+    suite can still be reviewed manually.
+    """
+    from rag.retrievers import EmbeddingsModel, VectorStore
+
+    queries = [
+        "fórmula de velocidad media",
+        "MRUA ecuación",
+        "¿Cuál es la fórmula de la aceleración?",
+    ]
+    embeddings = EmbeddingsModel()
+    vector_store = VectorStore()
+    all_passed = True
+
+    print("\n[ASSERT] Formula retrieval: at least one top-3 chunk must contain LaTeX ($)")
+    for query in queries:
+        query_embedding = embeddings.embed_query(query)
+        docs = vector_store.similarity_search(query_embedding, k=3)
+        has_latex = any("$" in doc.page_content for doc in docs)
+        status = "PASS" if has_latex else "FAIL"
+        all_passed = all_passed and has_latex
+        print(f"  [{status}] {query}")
+        for i, doc in enumerate(docs, start=1):
+            preview = doc.page_content.replace("\n", " ")[:100]
+            print(f"    chunk {i}: {preview}{'...' if len(doc.page_content) > 100 else ''}")
+
+    return all_passed
+
+
 if __name__ == "__main__":
     main()
+    latex_ok = test_formula_retrieval()
+    print(f"\nFormula retrieval assertion: {'PASS' if latex_ok else 'FAIL'} (non-fatal)")
