@@ -28,6 +28,26 @@ from rag.splitters import split_documents  # noqa: E402
 DEFAULT_PDFS_DIR = PROJECT_ROOT / "data" / "pdfs"
 DEFAULT_MARKDOWN_DIR = PROJECT_ROOT / "data" / "markdown"
 
+CANONICAL_PDFS = [
+    "Cinemática 1.pdf",
+    "Cinemática 2.pdf",
+    "Dinámica 1.pdf",
+    "Dinámica 2pdf.pdf",
+    "cuadernillo-fisica-1.pdf",
+]
+
+
+def _check_canonical_corpus(pdfs_dir: Path) -> None:
+    """Abort if any canonical PDF is missing.
+
+    The 5-PDF set is the canonical corpus for the marker-pdf-loader change.
+    See openspec/changes/marker-pdf-loader/spec.md § Single-Corpus Source.
+    """
+    missing = [p for p in CANONICAL_PDFS if not (pdfs_dir / p).exists()]
+    if missing:
+        print(f"[ABORT] Canonical corpus incomplete — missing: {', '.join(missing)}")
+        sys.exit(1)
+
 
 def load_markdown(md_paths: list[Path]) -> list:
     """Carga archivos markdown como Documents (uno por archivo).
@@ -195,6 +215,9 @@ def main() -> int:
         help="Borra el store y re-indexa desde cero",
     )
     args = parser.parse_args()
+
+    if args.pdfs_dir == DEFAULT_PDFS_DIR and not args.pdf:
+        _check_canonical_corpus(args.pdfs_dir)
 
     if args.reset:
         print("[RESET] Borrando vector store...")
