@@ -13,6 +13,14 @@ Used in two places:
   (baking the model into the image), so HF Spaces' free tier 100 MB
   LFS cap does not block the push (the model is 448 MB).
 
+Notes:
+- The 5-PDF canonical corpus is enforced by `scripts/indexar_pdfs.py`;
+  this script only prepares the embedding model, not the corpus.
+- marker-pdf/surya models are baked at Docker build time via
+  `create_model_dict()` and `MODEL_CACHE_DIR` (see Dockerfile).
+- ChromaDB paths: dev uses `data/chroma/` (default `CHROMA_PERSIST_DIR`),
+  deploy uses `rag/index/chroma/` (set in Dockerfile).
+
 Usage:
     python scripts/preparar_indice_hf.py
 
