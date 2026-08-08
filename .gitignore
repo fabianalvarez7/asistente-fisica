@@ -43,6 +43,12 @@ data/chroma/
 data/*.db
 data/*.sqlite*
 data/*.sqlite3
+# SQLite WAL mode sidecars (created automatically when the DB is opened
+# in WAL mode, which is the default for modern SQLite). Not source files;
+# they're regenerated on every DB write.
+data/*.db-shm
+data/*.db-wal
+data/*.db-journal
 material-fisica/
 
 # Testing
