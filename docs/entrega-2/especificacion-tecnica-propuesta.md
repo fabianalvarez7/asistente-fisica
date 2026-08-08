@@ -1,6 +1,6 @@
 # Especificación Técnica — Entrega 2 (Sección 3)
 
-**Documento de trabajo** para la Entrega 2 (Primer Avance: Maquetación del Prototipo). **Sección 3:** Especificación Técnica. **Estado:** borrador inicial. **Última actualización:** 2026-07-26.
+**Documento de trabajo** para la Entrega 2 (Primer Avance: Maquetación del Prototipo). **Sección 3:** Especificación Técnica. **Estado:** borrador inicial. **Última actualización:** 2026-08-07.
 
 ## Avance de desarrollo
 
@@ -18,7 +18,7 @@
 
 **Persistencia de historial.** Base de datos SQLite local con tabla `messages(id, student_name, role, content, created_at)`. Función `get_or_create_student(name)` que crea el registro si no existe. El historial se inyecta en la ventana de contexto del LLM (`HISTORY_WINDOW=10` por defecto) para mantener coherencia multi-turno.
 
-**Despliegue.** Imagen Docker construida a partir de un `Dockerfile` mínimo, hospedada en Hugging Face Spaces (tier `cpu-basic`, 16 GB RAM, puerto 7860). El modelo de embeddings se bakea en build time mediante `scripts/preparar_indice_hf.py`.
+**Despliegue.** Imagen Docker construida a partir de un `Dockerfile` mínimo, hospedada en Hugging Face Spaces (tier `cpu-basic`, 16 GB RAM, puerto 7860). El modelo de embeddings se bakea en build time mediante `scripts/preparar_indice_hf.py`. Los modelos de `marker-pdf`/`surya` (~3.45 GB) también se hornean en la imagen mediante `create_model_dict()` y la variable `MODEL_CACHE_DIR` — así el Space no re-descarga modelos en cada cold-start.
 
 ### Placeholders explícitos (a iterar en próximas etapas)
 
@@ -46,7 +46,7 @@
 
 **Persistencia:** SQLite. Archivo único, sin servidor, fácil de migrar a Postgres si el prototipo crece.
 
-**Conversión PDF → Markdown:** pymupdf4llm como punto de partida (liviano, conserva estructura básica). Plan B: `marker-pdf` o Mathpix si la pérdida de fórmulas/imágenes es significativa en la primera indexación.
+**Conversión PDF → Markdown:** `marker-pdf` (1.10.2, instalado en `.venv`). Recuperó 2665 delimitadores LaTeX en la primera indexación del corpus canónico de 5 PDFs (Cinemática 1, Cinemática 2, Dinámica 1, Dinámica 2, cuadernillo), contra cero fórmulas que recuperaba `pymupdf4llm` en el mismo material. El singleton del converter amortiza la carga del modelo (~10 GB RAM peak) entre todos los PDFs del corpus. El bake de ChromaDB se valida con `scripts/verify_latex.py` (≥2000 LaTeX NFR) antes de commitear. `pymupdf4llm` fue removido del `requirements.txt` — la decisión se documenta en el design del change `marker-pdf-loader`.
 
 **Despliegue:** Hugging Face Spaces con `sdk: docker`. Tier `cpu-basic` (16 GB RAM, sleep tras ~48 h de inactividad).
 
@@ -70,11 +70,13 @@
 
 ### Aciertos
 
-**Calidad de retrieval validada en muestra de PDFs.** En las semanas 1-2, se construyó el pipeline de indexación con `pymupdf4llm` y se ejecutaron consultas de prueba sobre el material del curso. La búsqueda semántica con `intfloat/multilingual-e5-small` recupera chunks relevantes para preguntas tipo ejercicio con buena precisión (validación cualitativa, no métrica formal).
+**Calidad de retrieval validada en muestra de PDFs.** En las semanas 1-2 se construyó el pipeline con `pymupdf4llm` y se ejecutaron consultas de prueba. En las semanas 7-8 se reemplazó por `marker-pdf` después de validar que el primero perdía todas las fórmulas LaTeX del material limpio de Sears. La búsqueda semántica con `intfloat/multilingual-e5-small` recupera chunks relevantes para preguntas tipo ejercicio, y ahora esos chunks contienen LaTeX legible (`$v_{\text{med-}x} = \frac{\Delta x}{\Delta t}$` y similares) que llega al LLM y se renderiza en la respuesta al estudiante.
 
 **Primer deploy a producción.** Semanas 3-4, el chat quedó desplegado en Hugging Face Spaces y accesible vía URL pública.
 
 **Capa Socrática operativa en producción.** El system prompt con la rampa de tres niveles (pregunta → pista → fórmula) guía al estudiante sin resolverle el ejercicio. Validado manualmente con un set de preguntas de la guía práctica del curso. Comportamiento consistente en español rioplatense.
+
+**Migración a `marker-pdf` completada y en producción.** El reemplazo de `pymupdf4llm` por `marker-pdf` se cerró en la semana 7-8: la nueva pipeline recuperó 2665 delimitadores LaTeX en el corpus canónico de 5 PDFs, los chunks ahora contienen fórmulas legibles que llegan al LLM, y el sistema renderiza LaTeX en la respuesta al estudiante (validado con `curl` al endpoint `/chat` del Space HF). El re-bake del corpus tarda 5-7 h en Mac MPS — aceptable para iteraciones futuras.
 
 **Historial persistente por estudiante.** Al recargar la página, el estudiante identificado por nombre ve su historial completo y la conversación continúa con contexto coherente. Funcional en local y en el Space.
 
@@ -82,7 +84,7 @@
 
 ### Dificultades
 
-**Elección de la herramienta de PDF → Markdown.** Todavía abierta. `pymupdf4llm` funciona para texto y fórmulas básicas, pero pierde calidad cuando el PDF original trae diagramas o fórmulas complejas renderizadas como imagen. Pendiente evaluar `marker-pdf` y Mathpix (con su tier gratuito de 1000 páginas/mes) si la pérdida se vuelve bloqueante para el dominio.
+**Elección de la herramienta de PDF → Markdown — cerrada.** Se eligió `marker-pdf` después de comparar con `pymupdf4llm` sobre los 4 capítulos de Sears (Cinemática y Dinámica, ~440 páginas): `marker-pdf` recuperó 559 fórmulas LaTeX en Cinemática 1 (25 páginas) contra 0 de `pymupdf4llm`. La razón del descarte de Mathpix es su tier gratuito de 1000 páginas/mes, que se queda corto para el corpus combinado (5 PDFs + re-bakes). La razón del descarte de `docling` fue su peso en disco y el setup extra. La decisión se documenta en el SDD change `marker-pdf-loader` (`openspec/changes/archive/2026-08-06-marker-pdf-loader/`).
 
 **Cold start del Space HF.** El primer request tras un período de inactividad (alrededor de 48 h) tarda entre 20 y 40 segundos en despertar el contenedor. Aceptado como trade-off del tier gratuito. Si el proyecto pasa a producción real, considerar Render con disco persistente o un servidor de la facultad.
 
