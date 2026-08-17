@@ -17,6 +17,9 @@ openai
 # (MPS en Mac Apple Silicon, CUDA en Windows con GPU NVIDIA)
 torch>=2.3
 
+# History persistence
+libsql-experimental>=0.0.55,<1.0
+
 # Utilidades
 python-dotenv>=1.0
 tiktoken>=0.7
