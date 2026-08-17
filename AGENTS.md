@@ -145,7 +145,7 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 11. **Typed-name identification for the chat, not user/password auth.** The prototype asks the student for a display name and uses it as the identity key for the SQLite history thread. This keeps the barrier to entry low: no passwords, no email, no session cookies. The trade-offs are intentional and accepted: two students who type the exact same name share a thread (we do not disambiguate "Ana" vs "Ana"), and there is no logout because there is no session. A future auth hardening pass can replace this without changing the history schema.
 
-12. **HF Spaces deploy accepts ephemeral-disk history loss.** The prototype may be deployed to Hugging Face Spaces, whose free tier uses an ephemeral disk that is reset when the space sleeps (roughly after ~48 hours of inactivity). Conversation history lives in SQLite on that disk, so it will be lost on sleep. This is an accepted trade-off for "free" hosting, matching proposal decision 5. If the prototype moves to a faculty server or Render with persistent disk, history survives restarts automatically.
+12. **History persistence via Turso (libSQL).** Conversation history is stored in a remote Turso database (libSQL, SQLite-compatible) outside the HF Spaces container. The backend connects via `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; when both are unset it falls back to local SQLite at `SQLITE_PATH` for dev convenience only. In production (HF Spaces), both Turso variables MUST be configured as Space Secrets. This eliminates the history loss on Space sleep that was previously accepted in this decision.
 
 13. **HF Spaces via Docker SDK.** The deploy is described by a `Dockerfile` plus a Space `README.md` with `sdk: docker` and `app_port: 7860`. The container runs as UID 1000, the embedding model is tracked via Git LFS, and pre-baked artifacts survive sleep/wake. This keeps the deploy target explicit and avoids Render-specific magic.
 
@@ -216,7 +216,9 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 |---|---|---|---|
 | `GROQ_API_KEY` | Yes | — | API key for Groq. Get one at https://console.groq.com. Each dev has their own. |
 | `CHROMA_PERSIST_DIR` | No | dev: `./data/chroma`; deploy (Dockerfile ENV): `./rag/index/chroma` | Where ChromaDB persists its vectors. Dev writes to `data/` (gitignored); the deployed Space reads from the committed `rag/index/chroma/` bake. Do not point dev at the deploy path — `scripts/preparar_indice_hf.py` is the only writer for that path. |
-| `SQLITE_PATH` | No | `./data/historial.db` | Where the conversation history is stored. |
+| `TURSO_DATABASE_URL` | No (dev) / Yes (deploy) | — | Turso database URL. Required in production as an HF Space Secret; dev falls back to `SQLITE_PATH` when unset. |
+| `TURSO_AUTH_TOKEN` | No (dev) / Yes (deploy) | — | Turso auth token. Required in production as an HF Space Secret; dev falls back to `SQLITE_PATH` when unset. |
+| `SQLITE_PATH` | No | `./data/historial.db` | Local SQLite fallback for conversation history. Dev-only; not used in production.
 | `EMBEDDINGS_DEVICE` | No | `auto` | `auto` picks MPS (macOS) / CUDA (Windows with GPU) / CPU. Set explicitly if needed. |
 | `LLM_MODEL` | No | `llama-3.3-70b-versatile` | The Groq model used for the chat. |
 | `HISTORY_WINDOW` | No | `10` | Number of recent messages injected into the Groq prompt. Set to `0` to disable history injection and restore single-turn behavior. |
