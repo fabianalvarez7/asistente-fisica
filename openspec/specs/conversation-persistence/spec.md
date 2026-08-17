@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Persistent, per-student conversation history for the chat prototype. All user and assistant messages are written to a SQLite file (`data/historial.db`). The schema auto-initializes on first backend startup. Messages are persisted around the Groq call so a crash mid-stream leaves a recoverable state. The frontend loads history on identification and can delete individual messages from the student's own thread. The last N messages (default 10) are injected into the Groq `messages` list between `_FEW_SHOT` and the current query, giving the model conversational context it did not have before.
+Persistent, per-student conversation history for the chat prototype. All user and assistant messages are written to a Turso database (libSQL, SQLite-compatible) when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, falling back to a local SQLite file (`data/historial.db`) for dev convenience only. The schema auto-initializes on first request. Messages are persisted around the Groq call so a crash mid-stream leaves a recoverable state. The frontend loads history on identification and can delete individual messages from the student's own thread. The last N messages (default 10) are injected into the Groq `messages` list between `_FEW_SHOT` and the current query, giving the model conversational context it did not have before.
 
 ## Requirements
 
@@ -171,18 +171,58 @@ History injection SHALL stay well within the model's context limit. For the defa
 - THEN the total injected tokens are at most ~3000 and the assembled prompt is within the model limit
 - AND no message content is truncated to fit a character budget
 
-### Requirement: Database file location and writability
+### Requirement: Database connection (Turso or local SQLite fallback)
 
-The SQLite file SHALL live at the path configured by `SQLITE_PATH` (default `./data/historial.db`) and SHALL be writable by the backend process. On platforms where the directory does not exist, the backend SHALL create it on startup. Persistence across HF Spaces sleep is NOT guaranteed (ephemeral disk) — this is an accepted trade-off (proposal decision 5) and SHALL be documented in AGENTS.md but NOT mitigated by this change.
+The conversation history SHALL be persisted in a Turso database (libSQL, SQLite-compatible) when both `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, connecting via the libSQL driver. When both are unset, the backend SHALL fall back to local SQLite at `SQLITE_PATH` (default `./data/historial.db`) — dev convenience only. The schema SHALL be created on first connection via `CREATE TABLE IF NOT EXISTS` (idempotent). The connection SHALL be established on first request and reused (not re-opened per request). On Turso failure (network or auth error), the backend SHALL return HTTP 503 with a user-friendly Spanish message; the frontend SHALL display it and suggest retrying.
 
-#### Scenario: Directory is auto-created
+#### Scenario: Turso connection is established on first request
 
-- GIVEN `SQLITE_PATH=./data/historial.db` but `./data/` does not exist
+- GIVEN the backend booted with `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` set
+- WHEN it receives its first request after deploy
+- THEN a libSQL connection is established and the schema is verified (`CREATE TABLE IF NOT EXISTS` succeeds)
+- AND the connection is reused across requests (not re-opened per request)
+
+#### Scenario: Local SQLite fallback when Turso vars are unset
+
+- GIVEN neither `TURSO_DATABASE_URL` nor `TURSO_AUTH_TOKEN` is set
 - WHEN the backend boots
-- THEN `./data/` is created and `historial.db` is initialised inside it
+- THEN it connects to local SQLite at `SQLITE_PATH` (default `./data/historial.db`)
+- AND this path is dev-only, not production
 
-#### Scenario: Configure via env var
+#### Scenario: Turso connection failure returns 503
 
-- GIVEN `SQLITE_PATH=/tmp/test_history.db`
+- GIVEN the Turso env vars are set but Turso is unreachable (network or auth error)
+- WHEN the backend receives a request that requires the database
+- THEN it responds HTTP 503 with a user-friendly Spanish message
+- AND no partial or fabricated assistant message is returned
+
+#### Scenario: Turso service disruption mid-request
+
+- GIVEN a request is in flight and the Turso connection drops mid-operation
+- WHEN the database operation raises a connection error
+- THEN the backend responds HTTP 503 with a user-friendly Spanish message
+- AND the frontend shows the error and suggests retry
+
+#### Scenario: Configure SQLite path via env var (dev-only fallback)
+
+- GIVEN `SQLITE_PATH=/tmp/test_history.db` and no Turso env vars
 - WHEN the backend boots
 - THEN SQLite uses `/tmp/test_history.db` and not the default path
+
+### Requirement: Turso credentials required in production deployment
+
+When deployed to Hugging Face Spaces, the backend MUST have both `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` configured as Space Secrets. Local SQLite (`SQLITE_PATH`) SHALL NOT be used in production. This is documented in AGENTS.md §7 and enforced by deployment config — the connection factory stays permissive so local dev works without a Turso account.
+
+#### Scenario: HF Spaces Secrets are set for production
+
+- GIVEN the backend is deployed to HF Spaces
+- WHEN the Space boots
+- THEN both Turso env vars are present as Secrets
+- AND it connects to Turso (local SQLite fallback never runs)
+
+#### Scenario: Missing Turso Secrets in production is a deploy misconfiguration
+
+- GIVEN the backend is deployed to HF Spaces but Turso Secrets are not set
+- WHEN the Space boots
+- THEN it falls back to local SQLite but history is lost on sleep
+- AND this is flagged as a misconfiguration in AGENTS.md, not a runtime error
