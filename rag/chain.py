@@ -16,6 +16,15 @@ from openai import OpenAI
 from rag.prompts import SYSTEM_PROMPT
 from rag.retrievers import EmbeddingsModel, VectorStore
 
+
+def _is_production() -> bool:
+    """Parse PRODUCTION env var robustly. Accepts '1'/'true'/'yes' (case-insensitive)
+    as truthy; anything else (empty, '0', 'false', unset) is dev mode. Avoids the
+    bug where PRODUCTION=0 accidentally enables prod mode because os.getenv
+    returns a non-empty string."""
+    return os.getenv("PRODUCTION", "").strip().lower() in ("1", "true", "yes")
+
+
 # Module-level singletons. EmbeddingsModel lazy-loads the transformer on first
 # use; VectorStore/ChromaDB reads are thread-safe. No per-request mutable state.
 _OPENAI_CLIENT = OpenAI(
@@ -145,7 +154,7 @@ def generate_response(
             )
         messages.append({"role": "user", "content": query})
 
-        if not os.getenv("PRODUCTION"):
+        if not _is_production():
             # Manual review gate: dump assembled message list for eyeball verification.
             for i, msg in enumerate(messages):
                 role = msg["role"]
@@ -171,7 +180,7 @@ def generate_response(
     except Exception as exc:  # noqa: BLE001
         # Dev mode surfaces the real exception so we can diagnose Groq errors
         # without enabling PRODUCTION. In prod we keep the generic fallback.
-        if os.getenv("PRODUCTION"):
+        if _is_production():
             yield f"event: error\ndata: {_FALLBACK_ERROR}\n\n"
         else:
             yield f"event: error\ndata: {exc}\n\n"

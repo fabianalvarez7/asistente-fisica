@@ -36,6 +36,19 @@ from rag.history import (
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
 
+
+# -----------------------------------------------------------------------------
+# Helper: parse PRODUCTION env var robustly
+# Accepts "1", "true", "yes" (case-insensitive) as truthy. Anything else
+# (including empty string, "0", "false", unset) is treated as dev mode.
+# This avoids the bug where PRODUCTION=0 accidentally enables prod mode
+# because os.getenv returns a non-empty string.
+# -----------------------------------------------------------------------------
+
+def _is_production() -> bool:
+    return os.getenv("PRODUCTION", "").strip().lower() in ("1", "true", "yes")
+
+
 # -----------------------------------------------------------------------------
 # Boot assertions — fail fast before accepting traffic
 # -----------------------------------------------------------------------------
@@ -120,7 +133,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     except Exception as exc:  # noqa: BLE001
         # Dev mode surfaces the real exception so we can diagnose DB issues.
         # In prod (HF Spaces) we keep the generic message.
-        if os.getenv("PRODUCTION"):
+        if _is_production():
             raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
         raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
@@ -128,7 +141,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         buffer = ""
         failed = False
         assistant_message_id = None
-        prod = bool(os.getenv("PRODUCTION"))
+        prod = _is_production()
 
         def _db_error_frame(exc: Exception) -> str:
             # Dev mode surfaces the real exception; prod keeps the generic
@@ -216,7 +229,7 @@ async def get_history_endpoint(student_name: str):
 
         messages = get_history(student_id)
     except Exception as exc:  # noqa: BLE001
-        if os.getenv("PRODUCTION"):
+        if _is_production():
             raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
         raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
@@ -243,7 +256,7 @@ async def delete_message_endpoint(message_id: int, student_name: str):
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
-        if os.getenv("PRODUCTION"):
+        if _is_production():
             raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
         raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
