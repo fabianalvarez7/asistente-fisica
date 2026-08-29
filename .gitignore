@@ -90,6 +90,13 @@ desktop.ini
 .atl/
 .Rhistory
 
+# Figma frame exports: PNG reference captures of the visual identity
+# designed by the project's UX designer. Used as a visual reference while
+# implementing the frontend; not source files. Regenerated whenever the
+# Figma file changes. The committed design source is the Figma file itself
+# (shared with the designer), not these local exports.
+docs/design/figma-exports/
+
 # HF embedding model snapshot. NOT committed: the model is 448 MB which
 # exceeds GitHub LFS free tier's 100 MB per-file limit. The Dockerfile
 # downloads it at build time (`scripts/preparar_indice_hf.py` does the

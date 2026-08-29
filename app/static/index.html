@@ -3,48 +3,85 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asistente de Física 1</title>
+  <title>FaradAI</title>
+  <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/style.css">
   <!-- KaTeX renders LaTeX math that the assistant streams back (e.g. $F = ma$). -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 <body>
-  <main class="chat-container">
-    <header class="chat-header">
-      <h1>Asistente de Física 1</h1>
-      <p class="subtitle">Respondemos desde los apuntes del curso</p>
-    </header>
+  <div class="app-shell">
+    <!-- Sidebar: brand identity on top + index of topics the RAG can answer
+         about. Persistent across the chat so students can keep it as a
+         reference. Stacks below the chat on small screens. -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="/img/logo-icon.svg" alt="" class="brand-icon" aria-hidden="true">
+        <img src="/img/logo-wordmark.svg" alt="FaradAI" class="brand-wordmark">
+      </div>
 
-    <ul id="messages" class="messages" aria-live="polite"></ul>
+      <section class="topics-index" aria-labelledby="topics-index-title">
+        <h2 id="topics-index-title" class="topics-index-title">Temas del curso</h2>
 
-    <div id="name-area" class="name-area">
-      <input
-        id="student-name"
-        type="text"
-        autocomplete="off"
-        maxlength="100"
-        placeholder="Escribí tu nombre para empezar..."
-        aria-label="Nombre"
-      />
-      <button type="button" id="name-submit">Entrar</button>
-    </div>
+        <div class="topic-group">
+          <h3 class="topic-group-title">Cinemática</h3>
+          <ul class="topics-list">
+            <li>Cinemática en línea recta</li>
+            <li>Movimiento en 2D y 3D</li>
+          </ul>
+        </div>
 
-    <form id="chat-form" class="input-area">
-      <input
-        id="query"
-        type="text"
-        name="query"
-        autocomplete="off"
-        maxlength="500"
-        placeholder="Escribí tu pregunta de Física 1..."
-        aria-label="Pregunta"
-        disabled
-      />
-      <button type="submit" id="send-btn" disabled>Enviar</button>
-    </form>
+        <div class="topic-group">
+          <h3 class="topic-group-title">Dinámica</h3>
+          <ul class="topics-list">
+            <li>Concepto de fuerza y Leyes de Newton</li>
+            <li>Aplicaciones de dinámica</li>
+          </ul>
+        </div>
 
-    <div id="hint" class="hint" role="status" aria-live="assertive"></div>
-  </main>
+        <div class="topic-group">
+          <h3 class="topic-group-title">Teoría de errores</h3>
+          <ul class="topics-list">
+            <li>Errores de medición</li>
+          </ul>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Chat column: messages + identification / input areas + footer. -->
+    <main class="chat-container">
+      <ul id="messages" class="messages" aria-live="polite"></ul>
+
+      <div id="name-area" class="name-area">
+        <input
+          id="student-name"
+          type="text"
+          autocomplete="off"
+          maxlength="100"
+          placeholder="Escribí tu nombre para empezar..."
+          aria-label="Nombre"
+        />
+        <button type="button" id="name-submit">Entrar</button>
+      </div>
+
+      <form id="chat-form" class="input-area">
+        <input
+          id="query"
+          type="text"
+          name="query"
+          autocomplete="off"
+          maxlength="500"
+          placeholder="Escribí tu pregunta de Física 1..."
+          aria-label="Pregunta"
+          disabled
+        />
+        <button type="submit" id="send-btn" disabled>Enviar</button>
+      </form>
+
+      <div id="hint" class="hint" role="status" aria-live="assertive"></div>
+      <p class="disclaimer">FaradAI puede cometer errores. Comprobá la información en los apuntes de las cátedras.</p>
+    </main>
+  </div>
 
   <!-- KaTeX (core + auto-render extension) loads before chat.js so the helper can call renderMathInElement. -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>

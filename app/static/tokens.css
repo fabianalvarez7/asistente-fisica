@@ -1,0 +1,149 @@
+/* =========================================================================
+ * Design tokens — FaradAI visual identity
+ *
+ * Source of truth for colors, typography, spacing, and radii.
+ * Component styles in style.css consume these via var(--token-name).
+ *
+ * Tokens were extracted from the Figma visual identity delivered by the
+ * project's UX designer (exported in docs/design/figma-exports/).
+ * Fonts are self-hosted under ./fonts/ for performance and offline use.
+ * ========================================================================= */
+
+/* -------------------------------------------------------------------------
+ * Fonts
+ * Geist (sans-serif, primary UI) — Vercel, SIL OFL 1.1.
+ * Source Serif 4 (serif, display only — used for the brand wordmark and the
+ * "Usuario" greeting on the Home screen) — Adobe, SIL OFL 1.1.
+ * ------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/SourceSerif4-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* -------------------------------------------------------------------------
+ * Colors
+ * Brand: green palette extracted from Figma. Primary is the soft green used
+ * for the user bubble and the "Continuar" button. The pale-green background
+ * (#E3EAE7) is the surface tint seen in the frames.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* Brand — green */
+  --color-brand-primary: #D4FBED;
+  --color-brand-primary-hover: #C7E8D8;
+  --color-brand-primary-soft: #ABDDC4;
+  --color-brand-bg: #E3EAE7;
+
+  /* Neutrals */
+  --color-text: #202725;
+  --color-text-muted: #555C59;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F8FAF9;
+  --color-border: #D7DFDB;
+
+  /* States (reserved; not yet used in components) */
+  --color-error: #D64242;
+}
+
+/* -------------------------------------------------------------------------
+ * Typography
+ * Geist is the primary UI font. Source Serif 4 is reserved for display
+ * touches (brand wordmark in the header, "Usuario" greeting on Home).
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --font-family-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  --font-family-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+
+  --font-size-sm: 0.875rem;   /* 14px — captions, hints */
+  --font-size-base: 1rem;     /* 16px — body */
+  --font-size-lg: 1.125rem;   /* 18px — emphasis */
+  --font-size-xl: 1.25rem;    /* 20px — h1, brand wordmark */
+  --font-size-2xl: 2rem;      /* 32px — hero greeting */
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+}
+
+/* -------------------------------------------------------------------------
+ * Spacing
+ * 4px-based scale. Stick to these — they line up with the Figma grid.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --space-xs: 0.25rem;  /*  4px */
+  --space-sm: 0.5rem;   /*  8px */
+  --space-md: 1rem;     /* 16px */
+  --space-lg: 1.25rem;  /* 20px */
+  --space-xl: 1.5rem;   /* 24px */
+  --space-2xl: 2rem;    /* 32px */
+}
+
+/* -------------------------------------------------------------------------
+ * Radii
+ * Mirrors the bubble shapes in the chat frames. 1rem = fully rounded bubble.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --radius-sm: 0.25rem;  /*  4px */
+  --radius-md: 0.5rem;   /*  8px */
+  --radius-lg: 1rem;     /* 16px — chat bubble */
+  --radius-pill: 9999px; /* fully rounded — chips, send button */
+}
+
+/* -------------------------------------------------------------------------
+ * Shadows
+ * Two-layer drop-shadows extracted from the Figma visual identity
+ * (Sombrars.svg). Each tier stacks an ambient layer (close, low blur) and
+ * a key layer (further, larger blur). All tinted with the brand text color
+ * (#121615) at low opacity for a soft, neutral elevation.
+ *
+ * Color-tinted glows (focus rings, error halos) are defined inline at the
+ * use site because they combine brand color + shadow opacity in ways that
+ * don't compress cleanly into a single token.
+ *
+ * The original Figma alphas (0.02–0.10) were too faint against our pale
+ * background, so each tier was bumped ~2x. Still subtle, but visible.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --shadow-sm: 0 1px 1px   rgba(18, 22, 21, 0.05),
+               0 2px 4px   rgba(18, 22, 21, 0.08);
+  --shadow-md: 0 2px 3px   rgba(18, 22, 21, 0.08),
+               0 6px 10px  rgba(18, 22, 21, 0.14);
+  --shadow-lg: 0 4px 8px   rgba(18, 22, 21, 0.12),
+               0 12px 20px rgba(18, 22, 21, 0.18);
+}
