@@ -25,9 +25,10 @@ _OPENAI_CLIENT = OpenAI(
 _EMBEDDINGS = EmbeddingsModel()
 _VECTOR_STORE = VectorStore()
 
-_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_MODEL = "openai/gpt-oss-120b"
 _DISTANCE_THRESHOLD = 0.5  # cosine distance; distance <= 0.5 => cos_sim >= 0.5
 _NO_CONTEXT_FALLBACK = "No encuentro info sobre esto en los apuntes"
+_FALLBACK_ERROR = "Ocurrió un error, intentá de nuevo"
 
 # Few-shot Socratic examples: 3 user/assistant pairs spanning error theory,
 # kinematics, and dynamics. Each assistant turn uses Rioplatense voseo, ends
@@ -168,6 +169,11 @@ def generate_response(
                 yield f"data: {content}\n\n"
 
     except Exception as exc:  # noqa: BLE001
-        yield f"event: error\ndata: {exc}\n\n"
+        # Dev mode surfaces the real exception so we can diagnose Groq errors
+        # without enabling PRODUCTION. In prod we keep the generic fallback.
+        if os.getenv("PRODUCTION"):
+            yield f"event: error\ndata: {_FALLBACK_ERROR}\n\n"
+        else:
+            yield f"event: error\ndata: {exc}\n\n"
 
     yield "data: [DONE]\n\n"
