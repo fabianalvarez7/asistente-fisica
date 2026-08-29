@@ -12,6 +12,7 @@ import json
 import os
 
 from fastapi import FastAPI, HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Load .env into os.environ BEFORE any module that reads env at import time.
 # rag.chain creates an OpenAI client at module load with
@@ -96,6 +97,26 @@ except Exception:  # noqa: BLE001
 # App
 # -----------------------------------------------------------------------------
 app = FastAPI(title="Asistente de Física 1")
+
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    """Force the browser to revalidate on every request.
+
+    Without this, students browsing the prototype cache the HTML/CSS/JS for
+    the session and miss new deploys (since they don't know to hard-refresh).
+    HF Spaces doesn't expose its CDN's cache-headers to us, but `no-cache`
+    at the origin causes browsers to revalidate and pick up the latest
+    build. The cost is one extra round-trip per page load — fine for a
+    prototype with low traffic.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
+app.add_middleware(NoCacheMiddleware)
 
 
 class ChatRequest(BaseModel):
