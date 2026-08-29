@@ -28,6 +28,26 @@ const FALLBACK_ERROR = 'Ocurrió un error, intentá de nuevo';
 let studentName = localStorage.getItem(STORAGE_KEY);
 
 /**
+ * HTML-escape user-provided text before injecting it into innerHTML. The
+ * welcome greeting is the only place we render raw HTML, and only the
+ * student's own name (from localStorage) ever lands inside the injected
+ * span. Escaping is still required because typed names are arbitrary.
+ */
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
+/**
+ * Escape regex metacharacters in user-provided text. Used to build a safe
+ * pattern that matches the student's name literally inside the welcome
+ * message content.
+ */
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Render LaTeX math in an element using KaTeX auto-render.
  *
  * Supports $...$ (inline) and $$...$$ (display) delimiters. The LLM emits
@@ -84,14 +104,37 @@ function createMessageElement(role) {
   return { li, bubble, content, deleteBtn };
 }
 
-function renderMessage(msg) {
+function renderMessage(msg, index = -1) {
   const { li, bubble, content, deleteBtn } = createMessageElement(msg.role);
   if (msg.id != null) {
     deleteBtn.dataset.messageId = msg.id;
   } else {
     deleteBtn.disabled = true;
   }
-  content.textContent = msg.content;
+
+  // Welcome greeting: the first assistant turn the student sees after
+  // identifying. We recognize it by position (index 0), role, and the fact
+  // that it contains the student's name. Render with the dedicated
+  // greeting styles and wrap the name in a serif-italic span so the brand
+  // wordmark tone carries over to the chat column.
+  const isWelcome = (
+    index === 0 &&
+    msg.role === 'assistant' &&
+    studentName &&
+    msg.content.includes(studentName)
+  );
+
+  if (isWelcome) {
+    bubble.classList.add('bubble-greeting');
+    const pattern = new RegExp(escapeRegex(studentName), '');
+    content.innerHTML = msg.content.replace(
+      pattern,
+      `<span class="greeting-name">${escapeHtml(studentName)}</span>`
+    );
+  } else {
+    content.textContent = msg.content;
+  }
+
   messages.appendChild(li);
   if (msg.role === 'assistant') {
     renderMathInBubble(bubble);
@@ -128,7 +171,9 @@ function processFrame(frame, assistant, userLi) {
 
   if (eventName === 'error') {
     assistant.li.classList.remove('loading');
-    assistant.content.textContent = FALLBACK_ERROR;
+    // Show whatever the backend sent. In dev this is the real exception
+    // (rate limits, timeouts, etc.); in prod it's the generic fallback.
+    assistant.content.textContent = dataValue || FALLBACK_ERROR;
     return;
   }
 
@@ -252,9 +297,7 @@ async function loadHistory() {
       throw new Error(`HTTP ${resp.status}`);
     }
     const data = await resp.json();
-    for (const msg of data.messages) {
-      renderMessage(msg);
-    }
+    data.messages.forEach((msg, i) => renderMessage(msg, i));
   } catch (err) {
     showHint('No se pudo cargar el historial');
   }

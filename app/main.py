@@ -64,6 +64,11 @@ except ValueError:
 ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un momento."
 
+# Welcome message persisted as the first assistant turn when a student types a
+# new display name. Only fires on first-time identification — students with
+# existing history keep their real conversation, not a greeting on every reload.
+WELCOME_MESSAGE = "¡Hola, {name}!"
+
 # -----------------------------------------------------------------------------
 # Schema init — safe to call repeatedly (CREATE TABLE IF NOT EXISTS)
 # -----------------------------------------------------------------------------
@@ -112,22 +117,24 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         student_id = get_or_create_student(name)
         user_message_id = save_message(student_id, "user", req.query)
         history = get_history(student_id, limit=HISTORY_WINDOW)
-    except Exception:  # noqa: BLE001
-        raise HTTPException(
-            status_code=503,
-            detail=DB_ERROR_MESSAGE,
-        )
+    except Exception as exc:  # noqa: BLE001
+        # Dev mode surfaces the real exception so we can diagnose DB issues.
+        # In prod (HF Spaces) we keep the generic message.
+        if os.getenv("PRODUCTION"):
+            raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
+        raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
     def event_generator():
         buffer = ""
         failed = False
         assistant_message_id = None
+        prod = bool(os.getenv("PRODUCTION"))
 
-        def _db_error_frame():
-            return (
-                f"event: error\ndata: "
-                f"{json.dumps({'message': DB_ERROR_MESSAGE})}\n\n"
-            )
+        def _db_error_frame(exc: Exception) -> str:
+            # Dev mode surfaces the real exception; prod keeps the generic
+            # fallback so users don't see internals.
+            msg = DB_ERROR_MESSAGE if prod else f"DB error: {exc!r}"
+            return f"event: error\ndata: {json.dumps({'message': msg})}\n\n"
 
         yield f"event: user_message_id\ndata: {user_message_id}\n\n"
 
@@ -139,8 +146,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                         assistant_message_id = save_message(
                             student_id, "assistant", ERROR_FALLBACK
                         )
-                    except Exception:  # noqa: BLE001
-                        yield _db_error_frame()
+                    except Exception as exc:  # noqa: BLE001
+                        yield _db_error_frame(exc)
                         yield "data: [DONE]\n\n"
                         return
                     yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
@@ -158,8 +165,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                                 assistant_message_id = save_message(
                                     student_id, "assistant", buffer
                                 )
-                            except Exception:  # noqa: BLE001
-                                yield _db_error_frame()
+                            except Exception as exc:  # noqa: BLE001
+                                yield _db_error_frame(exc)
                                 yield "data: [DONE]\n\n"
                                 return
                             yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
@@ -168,13 +175,15 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                     buffer += payload
 
                 yield token
-        except Exception:  # noqa: BLE001
+        except Exception as outer_exc:  # noqa: BLE001
             try:
                 assistant_message_id = save_message(
                     student_id, "assistant", ERROR_FALLBACK
                 )
-            except Exception:  # noqa: BLE001
-                yield _db_error_frame()
+            except Exception as inner_exc:  # noqa: BLE001
+                # If the outer exception is from the DB, pass it; otherwise
+                # the inner one (the DB write failure) is what the user needs.
+                yield _db_error_frame(outer_exc if isinstance(outer_exc, Exception) and "save" not in str(outer_exc) else inner_exc)
                 yield "data: [DONE]\n\n"
                 return
             yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
@@ -186,7 +195,13 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
 @app.get("/history")
 async def get_history_endpoint(student_name: str):
-    """Return all messages for a student, ordered by created_at ASC."""
+    """Return all messages for a student, ordered by created_at ASC.
+
+    First-time identification: if the typed name has no student row yet, the
+    student is created and a welcome message is persisted as the first
+    assistant turn. Subsequent calls with the same name return the existing
+    history unchanged.
+    """
     name = student_name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
@@ -194,11 +209,16 @@ async def get_history_endpoint(student_name: str):
     try:
         student_id = get_student_by_name(name)
         if student_id is None:
-            return {"messages": []}
+            # First time we see this name: create the student and drop the
+            # welcome message into the conversation so it survives reloads.
+            student_id = get_or_create_student(name)
+            save_message(student_id, "assistant", WELCOME_MESSAGE.format(name=name))
 
         messages = get_history(student_id)
-    except Exception:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
+    except Exception as exc:  # noqa: BLE001
+        if os.getenv("PRODUCTION"):
+            raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
+        raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
     return {"messages": messages}
 
@@ -222,8 +242,10 @@ async def delete_message_endpoint(message_id: int, student_name: str):
         delete_message(message_id, requester_id)
     except HTTPException:
         raise
-    except Exception:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
+    except Exception as exc:  # noqa: BLE001
+        if os.getenv("PRODUCTION"):
+            raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
+        raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
     return {"deleted": True}
 
