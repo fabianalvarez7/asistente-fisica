@@ -54,7 +54,12 @@ def _get_connection():
         else:
             db_path = os.getenv(_SQLITE_PATH_ENV, _DEFAULT_DB_PATH)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
-            _connection = sqlite3.connect(db_path)
+            # check_same_thread=False: FastAPI dispatches endpoints to a pool
+            # of worker threads, and the cached connection is shared across
+            # them. The module-level _connection_lock serializes access so we
+            # don't need SQLite's per-thread guard. (Production uses Turso/
+            # libSQL via the branch above — this only applies to local dev.)
+            _connection = sqlite3.connect(db_path, check_same_thread=False)
             _connection.execute("PRAGMA journal_mode = WAL")
             _connection.execute("PRAGMA foreign_keys = ON")
         return _connection
@@ -99,7 +104,7 @@ def init_db(db_path: str | None = None) -> None:
         conn = _get_connection()
     else:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA foreign_keys = ON")
 
