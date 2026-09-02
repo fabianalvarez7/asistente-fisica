@@ -12,6 +12,7 @@ dev convenience. Schema and behavior are documented in
 ``openspec/changes/2026-08-14-persistent-history/design.md``.
 """
 
+import functools
 import os
 import sqlite3
 import threading
@@ -65,6 +66,53 @@ def _get_connection():
         return _connection
 
 
+def _reset_connection() -> None:
+    """Drop the cached connection so the next call rebuilds it.
+
+    Used as the recovery step when a connection-level error is caught by
+    ``_reconnect_on_failure``: the next call to ``_get_connection`` will
+    recreate the connection with the current env vars. Closing is
+    best-effort — a broken handle may raise on ``close()`` and we don't
+    care because we're discarding it anyway.
+    """
+    global _connection
+    with _connection_lock:
+        if _connection is not None:
+            try:
+                _connection.close()
+            except Exception:
+                # Closing a broken handle can raise; we are discarding it
+                # anyway, so swallow and move on.
+                pass
+            _connection = None
+
+
+def _reconnect_on_failure(func):
+    """Decorator: retry the wrapped function once after rebuilding the
+    connection.
+
+    Catches the SQLite connection-level errors (``OperationalError`` and
+    the broader ``DatabaseError``) that signal a stale handle — Turso
+    TTL expiry, network blip, container sleep/wake, etc. — drops the
+    cached connection, and re-invokes the function so ``_get_connection``
+    builds a fresh one. Other exceptions (``ProgrammingError`` on bad
+    SQL, ``IntegrityError`` on constraint violations) propagate
+    unchanged because they are not connection issues.
+
+    If ``libsql_experimental`` starts raising exception types outside
+    the ``sqlite3`` hierarchy, extend the ``except`` tuple below — see
+    ``docs/gotchas.md`` for the failure mode this guards against.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (sqlite3.OperationalError, sqlite3.DatabaseError):
+            _reset_connection()
+            return func(*args, **kwargs)
+    return wrapper
+
+
 def _configure_connection(conn: sqlite3.Connection) -> None:
     """No-op shim kept for diff minimality.
 
@@ -90,6 +138,7 @@ def _rows_to_dicts(cursor) -> list[dict]:
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
+@_reconnect_on_failure
 def init_db(db_path: str | None = None) -> None:
     """Create tables and indexes if they don't exist. Idempotent.
 
@@ -137,6 +186,7 @@ def init_db(db_path: str | None = None) -> None:
     conn.commit()
 
 
+@_reconnect_on_failure
 def get_or_create_student(display_name: str) -> int:
     """Return the id of the first student with this exact display_name.
 
@@ -160,6 +210,7 @@ def get_or_create_student(display_name: str) -> int:
     return cursor.lastrowid
 
 
+@_reconnect_on_failure
 def get_student_by_name(display_name: str) -> int | None:
     """Return the `id` of the first row matching `display_name` (case-sensitive).
 
@@ -173,6 +224,7 @@ def get_student_by_name(display_name: str) -> int | None:
     return row[0] if row is not None else None
 
 
+@_reconnect_on_failure
 def get_message_owner(message_id: int) -> int | None:
     """Return the `student_id` of the message with `id = message_id`.
 
@@ -187,6 +239,7 @@ def get_message_owner(message_id: int) -> int | None:
     return row[0] if row is not None else None
 
 
+@_reconnect_on_failure
 def save_message(student_id: int, role: str, content: str) -> int:
     """Insert a message row and return its id.
 
@@ -209,6 +262,7 @@ def save_message(student_id: int, role: str, content: str) -> int:
     return cursor.lastrowid
 
 
+@_reconnect_on_failure
 def get_history(student_id: int, limit: int | None = None) -> list[dict]:
     """Return messages for a student, ordered by ``created_at ASC, id ASC``.
 
@@ -246,6 +300,7 @@ def get_history(student_id: int, limit: int | None = None) -> list[dict]:
     return _rows_to_dicts(cursor)
 
 
+@_reconnect_on_failure
 def delete_message(message_id: int, student_id: int) -> bool:
     """Delete the message with ``id = message_id`` AND ``student_id = student_id``.
 
