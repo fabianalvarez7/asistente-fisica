@@ -91,6 +91,18 @@
 
 **Workaround**: por ahora todo funciona. Si en el futuro hay incompatibilidad, ver si marker-pdf sacó nueva versión compatible con transformers 5.x.
 
+## History layer (Turso / SQLite)
+
+### La conexión cacheada puede quedar stale y matar todos los endpoints
+
+**Qué pasa**: de repente, `GET /history` y `POST /chat` empiezan a devolver 503 (`"No se pudo guardar la conversación. Reintentá en un momento."` en prod, `"DB error: OperationalError(...)"` en dev). Los assets estáticos cargan bien, el contenedor está vivo, pero **toda la capa de DB falla** hasta que se reinicia el contenedor.
+
+**Por qué**: `rag/history.py` cachea la conexión (Turso o SQLite) a nivel de módulo (`_connection = None`). Si esa conexión muere — TTL de Turso, blip de red, sleep/wake del Space, o un `kill -9` interno del driver — el módulo sigue devolviendo el handle roto porque `_connection is not None`, y cada llamada subsiguiente tira `OperationalError`.
+
+**Workaround**: el decorador `_reconnect_on_failure` (en `rag/history.py`) envuelve cada función pública del módulo. Si la primera llamada tira `sqlite3.OperationalError` o `sqlite3.DatabaseError`, descarta la conexión cacheada y reintenta la función una vez — `_get_connection` ve `_connection is None` y arma una conexión nueva. Si el reintento también falla, la excepción se propaga como siempre.
+
+**Si pasa otra vez con un tipo de excepción distinto**: probablemente `libsql_experimental` esté levantando algo fuera de la jerarquía de `sqlite3`. Extender la tupla en `except (...)` de `_reconnect_on_failure`. Si volvés a ver este síntoma, fijate primero en los logs del Space (HF Spaces → tab Logs) — la excepción cruda está ahí, solo que el endpoint la enmascara con `DB_ERROR_MESSAGE` cuando `PRODUCTION=true`.
+
 ## Splitter (RecursiveCharacterTextSplitter)
 
 ### Puede cortar fórmulas LaTeX por la mitad
