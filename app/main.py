@@ -36,6 +36,7 @@ from rag.history import (
 )
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
+from rag.topics import load_topics
 
 
 # -----------------------------------------------------------------------------
@@ -282,6 +283,26 @@ async def delete_message_endpoint(message_id: int, student_name: str):
         raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
 
     return {"deleted": True}
+
+
+@app.get("/topics")
+async def get_topics():
+    """Return the thematic units extracted from the course syllabus PDF.
+
+    Used by the sidebar in the chat UI to show the "índice de temas".
+    Failures are treated as decorative: the chat remains usable.
+    """
+    try:
+        unidades = load_topics()
+    except Exception as exc:  # noqa: BLE001
+        if _is_production():
+            raise HTTPException(
+                status_code=503,
+                detail="No se pudo cargar el índice de temas.",
+            )
+        raise HTTPException(status_code=503, detail=f"Topics error: {exc!r}")
+
+    return {"unidades": unidades}
 
 
 # Serve the chat UI and its assets. Routes declared above take precedence;

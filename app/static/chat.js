@@ -303,6 +303,40 @@ async function loadHistory() {
   }
 }
 
+const topicsContainer = document.getElementById('topics-container');
+
+async function loadTopics() {
+  if (!topicsContainer) return;
+
+  try {
+    const resp = await fetch('/topics');
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+
+    const fragment = document.createDocumentFragment();
+    for (const unidad of data.unidades || []) {
+      const group = document.createElement('div');
+      group.className = 'topic-group';
+
+      const title = document.createElement('h3');
+      title.className = 'topic-group-title';
+      title.textContent = `UNIDAD ${unidad.numero} — ${unidad.titulo}`;
+
+      group.appendChild(title);
+      fragment.appendChild(group);
+    }
+
+    topicsContainer.innerHTML = '';
+    topicsContainer.appendChild(fragment);
+  } catch (err) {
+    // El sidebar es decorativo: si falla, ocultamos el contenedor sin
+    // interrumpir la experiencia de chat.
+    topicsContainer.style.display = 'none';
+  }
+}
+
 nameSubmit.addEventListener('click', handleNameSubmit);
 nameInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
@@ -350,3 +384,5 @@ if (studentName) {
 } else {
   setChatEnabled(false);
 }
+
+loadTopics();
