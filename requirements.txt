@@ -8,6 +8,12 @@ sentence-transformers>=3.0
 # Supersedes docs/adr/0001-pdf-loader-marker.md via the marker-pdf-loader change.
 marker-pdf>=1.10
 
+# Used by rag/topics.py to extract the sidebar syllabus (Contenidos
+# Temáticos.pdf). Currently also pulled in transitively by marker-pdf,
+# but pinned explicitly so a future marker-pdf upgrade can't silently
+# drop it and break /topics in production.
+pymupdf4llm>=1.27
+
 # Chat transport
 fastapi
 uvicorn[standard]
