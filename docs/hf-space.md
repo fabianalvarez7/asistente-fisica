@@ -97,6 +97,7 @@ git clone https://fabianalvarez7:${HF_TOKEN}@huggingface.co/spaces/fabianalvarez
 rsync -av --delete \
   --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
   --exclude='.DS_Store' --exclude='.git' \
+  --exclude='.gitattributes' \
   --exclude='data/' --exclude='.pytest_cache' --exclude='.mypy_cache' \
   --exclude='rag/index/hf-model' \
   --exclude='openspec/' \
@@ -107,26 +108,58 @@ rsync -av --delete \
   --exclude='tests/__pycache__/' \
   ./ /tmp/asistente-fisica-space/
 
-# 3. Asegurarse de que .gitattributes tenga el tracking LFS para los binarios.
-#    (Una vez configurado en el Space, queda para siempre.)
-grep -q '\.bin filter=lfs' /tmp/asistente-fisica-space/.gitattributes || cat >> /tmp/asistente-fisica-space/.gitattributes <<'EOF'
+# 3. Restaurar las reglas LFS en el .gitattributes del Space.
+#    ⚠️ El .gitattributes del Space es INTENCIONALMENTE distinto al del source:
+#       - Source: vacío (no necesita LFS porque todo lo grande vive en `data/`,
+#         que está gitignored).
+#       - Space: necesita reglas LFS/xet para que el bake se materialice
+#         como binario real al hacer checkout dentro del contenedor.
+#    Por eso `--exclude='.gitattributes'` en el rsync: para no pisar las reglas
+#    del Space con el archivo vacío del source. Si esto falla, el bake queda
+#    como LFS pointer ASCII en el contenedor y ChromaDB crashea al arranque
+#    con `chromadb.errors.InternalError: error returned from database:
+#    (code: 26) file is not a database`.
+grep -q '\.bin filter=lfs' /tmp/asistente-fisica-space/.gitattributes || cat > /tmp/asistente-fisica-space/.gitattributes <<'EOF'
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.sqlite3 filter=lfs diff=lfs merge=lfs -text
 *.pickle filter=lfs diff=lfs merge=lfs -text
 EOF
 
-# 4. Forzar que los binarios del bake pasen por el filtro LFS.
+# 4. Forzar que los binarios del bake pasen por el filtro LFS al commitear.
 #    Sin esto, los blobs quedan como git regular y el push falla con
 #    "Your push was rejected because it contains binary files".
+#
+#    🐛 Gotcha macOS: Apple Git 2.50.1 NO invoca el filtro LFS automáticamente
+#    durante `git add`, ni siquiera con `git lfs install` y `.gitattributes`
+#    bien configurados. El filtro SÍ existe (`git lfs clean -- file < file`
+#    funciona) pero git no lo invoca en el path de add. Workaround: correr
+#    `git lfs clean` manualmente sobre cada binario antes del add para que el
+#    working tree contenga pointers y no blobs crudos.
 cd /tmp/asistente-fisica-space
 git rm --cached -r rag/index/chroma/ 2>/dev/null
+for f in $(git status --porcelain | awk '/^.* rag\/index\/chroma/{print $2}'); do
+  git lfs clean -- "$f" < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 git add -A
 
-# 5. Commit + push (HF auto-rebuilds).
+# 5. Configurar credential helper para el push.
+#    🐛 Gotcha HF: desde 2025, HF rechaza autenticación con `user:password@host`
+#    en URLs git para operaciones de push (sí funciona para fetch, raro). El push
+#    tira "Password authentication in git is no longer supported". Workaround:
+#    usar credential helper con el token (el proyecto lo guarda en
+#    `HUGGING_FACE_TOKEN` en `.env`, no en `HF_TOKEN`).
+TOK=$(grep "^HUGGING_FACE_TOKEN=" .env | head -1 | cut -d= -f2- | tr -d '\n' | tr -d ' ')
+printf "https://fabianalvarez7:%s@huggingface.co\n" "$TOK" > /tmp/hf_credentials
+chmod 600 /tmp/hf_credentials
+git config credential.helper "store --file=/tmp/hf_credentials"
+git remote set-url origin "https://huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr"
+
+# 6. Commit + push (HF auto-rebuilds). Usar --force-with-lease si el remote
+#    tiene commits divergentes (ej. un commit "test" dejado por una probe API).
 git -c user.email="fabianalvarez7@users.noreply.huggingface.co" \
     -c user.name="Fabián Álvarez" \
     commit -m "redeploy: <descripción corta del cambio>"
-git push origin main
+git push --force-with-lease origin main
 ```
 
 Después del push, monitorear el build en https://huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr (la UI muestra el estado: `RUNNING_BUILDING` → `RUNNING`). El primer rebuild con cambios en el bake tarda 1-2 min; si cambia `requirements.txt` o el `Dockerfile`, 5-10 min.
@@ -200,3 +233,71 @@ git push --force-with-lease origin main
 El force-push dispara un rebuild. Los datos del Space en runtime (SQLite history) NO se preservan en el rollback — el disco es efímero, se pierden al redeploy.
 
 > Migrado desde Render (que tenía `render.yaml` y disco persistente) a HF Spaces en 2026-06-30. Si volvés a Render en algún momento, el historial tiene `render.yaml` en commits anteriores al switch.
+
+## Gotchas de LFS / xet en macOS (consolidado)
+
+Tres trampas específicas del entorno de desarrollo (Apple Git + Homebrew xet + HF Spaces) que ya nos costaron tiempo. Si volvés a verlas, mirá primero esta sección.
+
+### 1. Apple Git 2.50.1 no invoca los filtros LFS automáticamente
+
+**Síntoma:** después de `git add -A`, `git ls-files -s <bin>` muestra el hash del contenido binario crudo en lugar del hash del LFS pointer. El commit resultante contiene blobs gigantes, no pointers. El push a HF falla con `Your push was rejected because it contains binary files`.
+
+**Causa:** bug de `git` que viene con CommandLineTools en macOS. El filter driver `filter.lfs.clean` está configurado (`git check-attr` confirma `filter: lfs`) y `git lfs clean -- file` directamente funciona, pero `git add` no invoca el filter.
+
+**Workaround:** correr `git lfs clean` manualmente sobre cada archivo afectado antes del `git add`, para que el working tree contenga pointers y git commitee los pointers sin tener que aplicar el filter él mismo:
+
+```bash
+for f in rag/index/chroma/chroma.sqlite3 rag/index/chroma/*/data_level0.bin; do
+  git lfs clean -- "$f" < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
+git add -A
+```
+
+Verificar con `wc -c rag/index/chroma/chroma.sqlite3` → debería decir ~132 bytes (tamaño típico de un pointer), no 9.5 MB.
+
+### 2. HF rechaza `user:password@host` en URLs para push
+
+**Síntoma:** `git push` falla con `Password authentication in git is no longer supported. You must use a user access token or an SSH key instead`. Pero `git fetch` con el mismo URL anda, y la API REST de HF con el mismo token anda (`/api/whoami-v2` responde 200).
+
+**Causa:** HF endureció la auth para push específicamente (no para fetch). El formato `https://USER:TOKEN@huggingface.co` es interpretado como user:password clásico y rechazado.
+
+**Workaround:** usar credential helper con el token escrito a un archivo separado:
+
+```bash
+TOK=$(grep "^HUGGING_FACE_TOKEN=" .env | head -1 | cut -d= -f2- | tr -d '\n')
+printf "https://fabianalvarez7:%s@huggingface.co\n" "$TOK" > /tmp/hf_credentials
+chmod 600 /tmp/hf_credentials
+git config credential.helper "store --file=/tmp/hf_credentials"
+git remote set-url origin "https://huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr"
+```
+
+Después `git push` lee el helper, encuentra la credencial y la manda como header `Authorization: Bearer ...`, que es lo que HF acepta.
+
+**Variable de entorno:** el proyecto usa `HUGGING_FACE_TOKEN`, no `HF_TOKEN`. Es lo que `huggingface-cli login` escribe por defecto.
+
+### 3. El bake del Space queda como LFS pointer → ChromaDB crashea con `(code: 26)`
+
+**Síntoma:** después de un redeploy exitoso, el Space pasa de `RUNNING` a `RUNTIME_ERROR` con traceback Python:
+
+```
+File "/app/rag/retrievers/vector_store.py", line 41, in _get_client
+    self._client = PersistentClient(...)
+chromadb.errors.InternalError: error returned from database: (code: 26) file is not a database
+```
+
+**Causa:** el rsync desde el source sobreescribió el `.gitattributes` del Space. El source tiene `.gitattributes` vacío (no necesita LFS — todo lo grande vive en `data/` gitignored). El Space necesita reglas LFS para que el bake (12 MB de SQLite + binarios) se materialice como blob real durante el checkout, no como pointer ASCII. Sin las reglas, el contenedor arranca con `chroma.sqlite3` como texto de 132 bytes, y ChromaDB tira `SQLITE_NOTADB` al abrirlo.
+
+**Workaround:**
+- El rsync ya tiene `--exclude='.gitattributes'` (ver paso 2 del workflow arriba), así que el archivo del Space sobrevive.
+- Después del rsync, el script fuerza las reglas LFS al `.gitattributes` del Space (paso 3).
+- Verificar el deploy: `curl -s https://huggingface.co/api/spaces/<owner>/<name>/runtime` devuelve `{"stage":"RUNNING",...}`. Si devuelve `RUNTIME_ERROR` con un traceback, ver gotcha #3.
+
+### Bonus: clone inicial del Space con skip-smudge
+
+`git clone` del Space puede fallar con `batch request: missing protocol: "<unknown>"` al hacer smudge de los LFS pointers, incluso con `git-xet` instalado. Workaround:
+
+```bash
+GIT_LFS_SKIP_SMUDGE=1 git clone https://fabianalvarez7:${HF_TOKEN}@huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr /tmp/asistente-fisica-space
+```
+
+El repo queda clonado con pointers ASCII en lugar de los blobs reales. Para el workflow de redeploy esto está bien (los blobs reales vuelven a aparecer cuando se hace rsync desde el source). Si alguna vez necesitás los blobs reales sin rsync, después del clone podés usar `huggingface-cli download` con `--repo-type=space` y `--include='rag/index/chroma/*'`.
