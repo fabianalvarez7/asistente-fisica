@@ -23,6 +23,9 @@ torch>=2.3
 # History persistence
 libsql-experimental>=0.0.55,<1.0
 
+# Dashboard
+streamlit>=1.30
+
 # Utilidades
 python-dotenv>=1.0
 tiktoken>=0.7

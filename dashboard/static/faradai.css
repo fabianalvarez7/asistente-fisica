@@ -1,0 +1,187 @@
+:root {
+  --color-brand-primary:      #D4FBED;
+  --color-brand-primary-hover:#C7E8D8;
+  --color-brand-primary-soft: #ABDDC4;
+  --color-brand-bg:           #E3EAE7;
+  --color-text:               #202725;
+  --color-text-muted:         #555C59;
+  --color-surface:            #FFFFFF;
+  --color-surface-alt:        #F8FAF9;
+  --color-border:             #D7DFDB;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-pill: 9999px;
+}
+
+html, body, [data-testid="stAppViewContainer"] {
+  background-color: var(--color-brand-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header con logo: wordmark SVG embebido como inline <svg> en el HTML.
+   Lo limitamos a un width fijo para que el F-mark del inicio siempre sea
+   visible y el texto "FaradAI" mantenga su aspect ratio original. */
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 0 1.25rem;
+  margin: 0;
+  background: transparent;
+  border: 0;
+}
+
+.dashboard-logo {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-logo svg {
+  width: 280px;
+  height: auto;
+  display: block;
+}
+
+.dashboard-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-subtitle {
+  font-family: system-ui, -apple-system, BlinkMacFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  margin: 0;
+  padding: 0;
+  line-height: 1.25;
+}
+
+/* Main title fallback */
+.stApp h1,
+.stApp h2,
+.stApp h3 {
+  color: var(--color-text) !important;
+  font-weight: 600 !important;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdown"] h1,
+[data-testid="stSidebar"] [data-testid="stMarkdown"] h2,
+[data-testid="stSidebar"] [data-testid="stMarkdown"] h3,
+[data-testid="stSidebar"] .stRadio label,
+[data-testid="stSidebar"] .stSelectbox label {
+  color: var(--color-text) !important;
+}
+
+/* KPI cards (st.metric) — verdes suaves */
+[data-testid="stMetric"] {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+[data-testid="stMetric"] label {
+  color: var(--color-text-muted) !important;
+  font-size: 0.875rem;
+}
+
+[data-testid="stMetric"] [data-testid="stMetricValue"] {
+  color: var(--color-text) !important;
+  font-weight: 600;
+  font-size: 1.75rem;
+}
+
+[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+  color: var(--color-text-muted) !important;
+}
+
+/* Dataframes and tables */
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--color-surface) !important;
+}
+
+/* Glide Data Grid (Streamlit's dataframe renderer): force light surfaces
+   for header rows, body cells, and the cell editor. Without this, dark-mode
+   defaults slip through and the tables render with black backgrounds. */
+[data-testid="stDataFrame"] [role="columnheader"],
+[data-testid="stDataFrame"] [role="gridcell"],
+[data-testid="stDataFrame"] [role="row"],
+[data-testid="stDataFrame"] div[class*="gdg-"],
+[data-testid="stDataFrame"] div[class*="gdc-"] {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text) !important;
+}
+
+[data-testid="stDataFrame"] [role="columnheader"] {
+  background-color: var(--color-surface-alt) !important;
+  font-weight: 600 !important;
+  color: var(--color-text) !important;
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+[data-testid="stDataFrame"] [role="row"]:hover {
+  background-color: var(--color-brand-bg) !important;
+}
+
+/* Captions / helper text */
+.stCaption,
+[data-testid="stCaptionContainer"] {
+  color: var(--color-text-muted) !important;
+  font-size: 0.875rem;
+}
+
+/* Info / warning boxes */
+.stAlert {
+  border-radius: var(--radius-md) !important;
+}
+
+.stAlert [data-baseweb="notification"] {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Primary buttons */
+.stButton > button {
+  background-color: var(--color-brand-primary) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-brand-primary-soft) !important;
+  border-radius: var(--radius-pill) !important;
+  font-weight: 600 !important;
+}
+
+.stButton > button:hover {
+  background-color: var(--color-brand-primary-hover) !important;
+}
+
+/* Selectbox / inputs */
+.stSelectbox > div > div {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--color-text) !important;
+}
+
+/* Footnote */
+.dashboard-footnote {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.5;
+}

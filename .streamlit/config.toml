@@ -1,0 +1,21 @@
+[theme]
+# Force light theme across the app. Without this, Glide Data Grid (Streamlit's
+# internal dataframe renderer) can inherit dark-mode colors that the per-element
+# CSS selectors can't reliably override. Setting the base theme to "light" makes
+# every dataframe render with a white surface regardless of the user's OS
+# preference.
+base = "light"
+
+# Brand colors, taken from app/static/tokens.css (FaradAI identity). Keep in
+# sync with dashboard/static/faradai.css if the palette ever moves.
+primaryColor = "#ABDDC4"
+backgroundColor = "#E3EAE7"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#202725"
+font = "sans serif"
+
+[server]
+# Allow the dashboard to be loaded inside an iframe (HF Spaces renders the
+# app inside their UI; without this the page may be blocked).
+enableCORS = false
+enableXsrfProtection = false
