@@ -28,7 +28,7 @@ El Space es un repo separado del repo de GitHub. Los archivos tracked son los mi
 
 > El modelo de embeddings **no se copia** al repo del Space. El Dockerfile lo descarga en build time (cacheado en `rag/index/hf-model/`, que es gitignored).
 >
-> Los modelos de marker-pdf/surya (~3.5 GB) **tampoco se copian**. El Dockerfile los descarga en build time mediante `create_model_dict()` y `MODEL_CACHE_DIR=/app/rag/index/marker-models`. Ver "Re-bakear el corpus" abajo.
+> El PDF loader (`pymupdf4llm`) **no requiere descarga de modelos** — es un wrapper sobre PyMuPDF. No hay nada extra que bake. Ver "Re-bakear el corpus" abajo.
 
 ## Plantilla de README.md para el Space
 
@@ -186,10 +186,12 @@ Si te equivocás y el push falla con `Your push was rejected because it contains
 Cuando cambie el corpus (PDFs o parámetros de chunking), regenerar el índice desde cero:
 
 ```bash
-# 1. Re-indexar los 5 PDFs canónicos (tarda ~5-7 h en Mac MPS; es normal).
+# 1. Re-indexar los PDFs del corpus (tarda ~2-3 min en Mac MPS; pymupdf4llm es rápido).
 python scripts/indexar_pdfs.py --reset
 
-# 2. Verificar que marker-pdf recuperó fórmulas en LaTeX antes de seguir.
+# 2. (Opcional) Verificar la cantidad de fórmulas LaTeX extraídas.
+#    pymupdf4llm NO recupera fórmulas-imagen, así que el conteo es 0
+#    para PDFs con fórmulas renderizadas como imágenes — eso es esperado.
 python scripts/verify_latex.py
 
 # 3. Copiar el índice local al artefacto bakeado que se commitea.
@@ -197,13 +199,11 @@ rm -rf rag/index/chroma && cp -r data/chroma rag/index/chroma/
 
 # 4. Commitear y subir al source (GitHub).
 git add rag/index/chroma/
-git commit -m "chore(data): rebake chroma index (marker-pdf, 5 PDFs)"
+git commit -m "chore(data): rebake chroma index (pymupdf4llm, 10 PDFs + formulas.md)"
 git push origin main
 ```
 
 Después seguir el "Workflow de redeploy" arriba para llevar el nuevo bake al Space.
-
-> Los modelos de marker-pdf se hornean en la imagen de Docker (no en el repo) mediante `create_model_dict()` durante el build. Esto evita que el Space los descargue en cada cold-start, manteniendo el primer request dentro del presupuesto de ~20-40 s.
 
 ## Variables y secretos
 
@@ -213,8 +213,6 @@ Después seguir el "Workflow de redeploy" arriba para llevar el nuevo bake al Sp
 | `CHROMA_PERSIST_DIR` | `Dockerfile` ENV | `./rag/index/chroma` en el Space. |
 | `HF_HOME` | `Dockerfile` ENV | `./rag/index/hf-model`. |
 | `SENTENCE_TRANSFORMERS_HOME` | `Dockerfile` ENV | Igual que `HF_HOME`. |
-| `MODEL_CACHE_DIR` | `Dockerfile` ENV | `./rag/index/marker-models` (modelos de marker-pdf/surya). |
-| `TORCH_DEVICE_MODEL` | `Dockerfile` ENV | `cpu` en el Space; las Mac/Windows usan auto. |
 | `LLM_MODEL` | `Dockerfile` ENV | `llama-3.3-70b-versatile`. |
 | `OMP_NUM_THREADS` | `Dockerfile` ENV | `1` para no saturar la CPU. |
 | `TOKENIZERS_PARALLELISM` | `Dockerfile` ENV | `false` para estabilidad de memoria. |

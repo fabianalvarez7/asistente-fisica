@@ -1,9 +1,14 @@
-"""Post-bake assertion for LaTeX formula richness.
+"""Post-bake report for LaTeX formula extraction.
 
 Connects to ChromaDB, counts inline ($...$) and display ($$...$$) formula
-delimiters across all indexed chunks, and asserts the NFR from the
-marker-pdf-loader spec: ≥ 2000 total LaTeX occurrences across the 5-PDF
-canonical corpus.
+delimiters across all indexed chunks, and prints a per-source report.
+Exits non-zero only if the store is empty (a hard failure that means
+the bake didn't land).
+
+Note: pymupdf4llm does NOT recover formulas rendered as images in the
+source PDF. PDFs that ship formulas as LaTeX text in the document body
+will count toward this total; PDFs that ship formulas as embedded images
+will report 0 — that is the known trade-off vs. marker-pdf. See ADR 0001.
 
 Usage:
     python scripts/verify_latex.py
@@ -21,7 +26,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from rag.retrievers import VectorStore  # noqa: E402
 
-DEFAULT_MIN_TOTAL = 2000
 DEFAULT_PERSIST_DIR = "./data/chroma"
 
 
@@ -39,16 +43,15 @@ def count_latex(text: str) -> tuple[int, int]:
     return display, inline
 
 
-def verify_latex(persist_dir: str | None = None, min_total: int = DEFAULT_MIN_TOTAL) -> int:
-    """Count LaTeX occurrences in the baked index and assert the NFR.
+def verify_latex(persist_dir: str | None = None) -> int:
+    """Count LaTeX occurrences in the baked index and report per source.
 
     Args:
         persist_dir: ChromaDB persist directory. Defaults to CHROMA_PERSIST_DIR
             env var or ./data/chroma.
-        min_total: Minimum required total LaTeX occurrences.
 
     Returns:
-        0 if the assertion passes, 1 otherwise.
+        0 if the store has chunks (informational pass), 1 if empty.
     """
     persist_dir = persist_dir or os.getenv("CHROMA_PERSIST_DIR", DEFAULT_PERSIST_DIR)
     vector_store = VectorStore(persist_dir=persist_dir)
@@ -92,23 +95,10 @@ def verify_latex(persist_dir: str | None = None, min_total: int = DEFAULT_MIN_TO
         )
     print("-" * 60)
     print(f"  TOTAL: display={total_display}, inline={total_inline}, sum={total}")
-    print(f"  REQUIRED: ≥ {min_total}")
     print("=" * 60)
-
-    if total < min_total:
-        print()
-        print("[FAIL] LaTeX assertion failed.")
-        top5 = sorted(per_doc.items(), key=lambda kv: kv[1]["total"], reverse=True)[:5]
-        print("Top 5 sources by formula count:")
-        for source, stats in top5:
-            print(
-                f"  {source}: display={stats['display']}, "
-                f"inline={stats['inline']}, total={stats['total']}"
-            )
-        return 1
-
     print()
-    print(f"[PASS] LaTeX assertion passed ({total} ≥ {min_total}).")
+    print(f"[INFO] Bake OK ({count} chunks). LaTeX counts above are informational;")
+    print("       PDFs with formulas-as-images will show 0 by design (see ADR 0001).")
     return 0
 
 

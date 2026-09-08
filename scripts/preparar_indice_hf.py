@@ -16,8 +16,8 @@ Used in two places:
 Notes:
 - The 5-PDF canonical corpus is enforced by `scripts/indexar_pdfs.py`;
   this script only prepares the embedding model, not the corpus.
-- marker-pdf/surya models are baked at Docker build time via
-  `create_model_dict()` and `MODEL_CACHE_DIR` (see Dockerfile).
+- The PDF loader is `pymupdf4llm` (no model download required) — see
+  `docs/adr/0001-pdf-loader-marker.md` for the rationale.
 - ChromaDB paths: dev uses `data/chroma/` (default `CHROMA_PERSIST_DIR`),
   deploy uses `rag/index/chroma/` (set in Dockerfile).
 

@@ -4,9 +4,12 @@ langchain-community>=0.3
 chromadb==1.5.9
 sentence-transformers>=3.0
 
-# PDF OCR with LaTeX formula extraction — primary loader.
-# Supersedes docs/adr/0001-pdf-loader-marker.md via the marker-pdf-loader change.
-marker-pdf>=1.10
+# PDF loader: pymupdf4llm for fast Markdown extraction with inline LaTeX.
+# See docs/adr/0001-pdf-loader-marker.md for the full rationale — we have
+# reverted to pymupdf4llm twice (June 2026 and September 2026) due to
+# marker-pdf performance problems. Marker-pdf is intentionally NOT
+# installed to avoid the 3.5 GB model download.
+pymupdf4llm>=0.0.17
 
 # Chat transport
 fastapi

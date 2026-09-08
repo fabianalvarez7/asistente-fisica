@@ -23,55 +23,33 @@
 - `chromadb.PersistentClient(path=...)` (reemplaza al viejo `Client`)
 - `sentence_transformers.SentenceTransformer(name, device=...)`
 
-## marker-pdf (PDF loader)
+## pymupdf4llm (PDF loader)
 
-### MPS parcial: TableRecEncoderDecoderModel no soporta MPS
+> **Decisión vigente** desde septiembre 2026. Ver ADR 0001 para la historia completa (2 reversiones desde marker-pdf).
 
-**Qué pasa**: warning `surya: TableRecEncoderDecoderModel is not compatible with mps backend. Defaulting to cpu instead`. marker tarda ~2 min/página en Mac con MPS (no ~10s como sería en H100).
+### Pierde fórmulas renderizadas como imágenes
 
-**Por qué**: ese modelo específico no fue portado a MPS. El resto del pipeline sí corre en MPS.
+**Qué pasa**: cuando una fórmula está embebida en el PDF como imagen (no como LaTeX escrito en el texto), `pymupdf4llm` no la recupera — el texto alrededor se preserva pero la fórmula se pierde (puede quedar como placeholder vacío o simplemente ausente).
 
-**Workaround**: ninguno conocido. La única forma de acelerar es GPU con CUDA (Mac con eGPU, o Linux con NVIDIA). Para el prototipo, aceptar los 2 min/pág y correr la indexación de noche.
+**Por qué**: `pymupdf4llm` extrae texto + estructura Markdown; no hace OCR de imágenes.
 
-### marker NO maneja bien PDFs escaneados puros
+**Workaround**: `data/markdown/formulas.md` complementa el catálogo de fórmulas del curso. Está indexado y se inyecta en el retrieval, así que queries del estilo "¿cuál es la fórmula de X?" pueden responder desde ahí aunque el PDF original tenga la fórmula como imagen. Si en el futuro se necesita OCR de fórmulas-imagen, evaluar **Mathpix API** (1000 páginas/mes gratis).
 
-**Qué pasa**: en PDFs que son 100% imágenes (escaneos de pizarra, fotos de ejercicios a mano), marker tarda mucho más (~24 min/10 pgs) y la calidad del OCR es pésima — alucina símbolos y repite texto.
+### PDFs escaneados puros: texto vacío
 
-**Por qué**: surya-OCR está entrenado principalmente para texto impreso y tablas, no para escritura a mano o figuras complejas.
+**Qué pasa**: en PDFs que son 100% imágenes (escaneos de pizarra, fotos de ejercicios a mano), `pymupdf4llm` devuelve texto vacío o casi vacío — no hace OCR.
 
-**Workaround**: NO indexar este tipo de PDFs. Pedirle a Nair versiones con texto seleccionable (Word, LaTeX, PDF de libro digital). El cuadernillo sí funciona bien.
+**Por qué**: igual que arriba — sin OCR.
 
-### Cada llamada a marker en proceso nuevo paga el costo completo
+**Workaround**: NO indexar este tipo de PDFs. Pedirle a Nair versiones con texto seleccionable (Word, LaTeX, PDF de libro digital). El cuadernillo sí funciona bien porque tiene texto seleccionable limpio.
 
-**Qué pasa**: si corrés `python script.py` dos veces, marker tarda 10 min en cada proceso (carga modelos + procesa PDFs), aunque los modelos ya estén en disco.
+### Velocidad: segundos por PDF
 
-**Por qué**: el converter de marker NO se puede serializar a disco. Vive solo en memoria del proceso.
+**Qué pasa**: `pymupdf4llm` procesa un PDF de ~60 páginas en ~10-20 segundos (load + split + embed + store), comparado con las ~12+ horas que tardaría marker-pdf en el mismo PDF.
 
-**Workaround**: agrupar todas las operaciones en un solo proceso. El `scripts/indexar_pdfs.py` ya hace esto. Si querés evitar pagar el costo cada vez, NO se puede — el costo de marker es one-shot por invocación.
+**Por qué**: no carga modelos pesados, es un wrapper sobre PyMuPDF que ya viene con la lib.
 
-### Modelos cacheados en `~/Library/Caches/datalab/models/` (macOS)
-
-**Qué pasa**: marker descarga ~3GB de modelos la primera vez. En runs siguientes, los modelos se leen del cache.
-
-**Por qué**: el cache es por usuario. Si cambias de usuario o borras `~/Library/Caches/`, marker vuelve a descargar.
-
-**Workaround**: si reinstalás macOS o cambiás de Mac, hay que volver a descargar. Es una sola vez.
-
-### Fórmulas inline mal interpretadas
-
-**Qué pasa**: algunas fórmulas inline se interpretan con heurísticas incorrectas. Ejemplo: en el cuadernillo, `x = A/U` (división) se convirtió en `$x = {A \choose U}$` (binomial, notación incorrecta).
-
-**Por qué**: el modelo de fórmulas inline usa heurísticas que a veces confunden notación.
-
-**Workaround**: las fórmulas en display (`$$...$$`) salen bien. Las inline, revisar manualmente. Para el caso de uso del asistente Socrático, es acceptable — el LLM puede reformular.
-
-### Variables perdidas en OCR
-
-**Qué pasa**: a veces variables se pierden o malinterpretan. Ejemplo del cuadernillo: "El X' es en nuestro ejemplo 14,5 cm" se convirtió en "El ' es en nuestro ejemplo 14, 5 , el valor verdadero...".
-
-**Por qué**: OCR/heurística de marker no es perfecta.
-
-**Workaround**: aceptar el ruido. Para RAG, el chunk sigue siendo útil (contiene las palabras clave). Para publicación, habría que revisar a mano.
+**Workaround**: ninguno necesario. La indexación cabe en un loop interactivo.
 
 ## ChromaDB
 
@@ -82,14 +60,6 @@
 **Por qué**: ChromaDB identifica la colección por path. No hay migración automática.
 
 **Workaround**: si necesitás cambiar el path, primero `python scripts/indexar_pdfs.py --reset` después de cambiar `.env`.
-
-### Conflictos con `sentence-transformers` por versiones de transformers
-
-**Qué pasa**: marker-pdf requiere `transformers < 5` (downgradea de 5.12 a 4.57) y `huggingface-hub < 1` (downgradea de 1.20 a 0.36). sentence-transformers usa transformers también.
-
-**Por qué**: marker-pdf depende de surya-ocr 0.17, que no es compatible con transformers 5.x.
-
-**Workaround**: por ahora todo funciona. Si en el futuro hay incompatibilidad, ver si marker-pdf sacó nueva versión compatible con transformers 5.x.
 
 ## History layer (Turso / SQLite)
 
@@ -115,9 +85,3 @@
 - Aumentar `chunk_size` a 2000
 - Usar `MarkdownTextSplitter` (en langchain) que respeta bloques
 - Agregar `$$` a la lista de separadores
-
-## Decisión: NO migrar a GPU dedicada
-
-**Por qué**: la inversión (eGPU + setup) no se amortiza para un corpus de <100 páginas que se indexa una vez. El plan es aceptar la indexación lenta en Mac con MPS y correrla de noche cuando llegue material nuevo.
-
-**Si cambia**: con 50+ PDFs limpios, el costo de marker empieza a ser prohibitivo en Mac. Ahí evaluar Render con GPU o un servicio de indexación dedicado.

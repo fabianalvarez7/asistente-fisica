@@ -1,32 +1,26 @@
 """PDF loader: converts PDFs to Markdown for ChromaDB indexing.
 
-Uses marker-pdf for LaTeX formula extraction. The PdfConverter and its
-model dictionary are loaded once as a module-level singleton so the
-multi-minute model warmup is amortized across all PDFs in a re-bake.
+Uses pymupdf4llm for fast Markdown extraction with inline LaTeX
+preservation. Supersedes the marker-pdf approach (ADR 0001).
 
-See docs/adr/0001-pdf-loader-marker.md for historical context and the
-marker-pdf-loader change proposal for the current rationale.
+Marker-pdf was abandoned because its text-recognition step was
+prohibitively slow for our corpus (text-recognition alone projected
+to ~66 days for the four new PDFs on consumer hardware). pymupdf4llm
+extracts text and inline LaTeX in seconds; the tradeoff is that
+rendered formula images (formulas-as-pictures in the source PDF) are
+not recovered. For our use case (Socratic chat assistant grounded
+in course PDFs), this is acceptable: the assistant is a guide, not
+a formula-OCR service, and `data/markdown/formulas.md` supplements
+the gap.
+
+See docs/adr/0002-pdf-loader-pymupdf4llm.md for the full rationale.
 """
 
 from pathlib import Path
 from typing import Union
 
+import pymupdf4llm
 from langchain_core.documents import Document
-from marker.converters.pdf import PdfConverter
-from marker.models import create_model_dict
-
-_CONVERTER: PdfConverter | None = None
-
-
-def _get_converter() -> PdfConverter:
-    """Return a cached PdfConverter, creating it on first call."""
-    global _CONVERTER
-    if _CONVERTER is None:
-        _CONVERTER = PdfConverter(
-            artifact_dict=create_model_dict(),
-            config={"disable_image_extraction": True},
-        )
-    return _CONVERTER
 
 
 def load_pdf(path: Union[str, Path]) -> list[Document]:
@@ -39,13 +33,11 @@ def load_pdf(path: Union[str, Path]) -> list[Document]:
 
     Returns:
         A list with exactly one Document:
-          - page_content: marker-pdf rendered markdown (text + LaTeX)
+          - page_content: pymupdf4llm-rendered markdown (text + inline LaTeX)
           - metadata: {"source": str(path)}
     """
     path = Path(path)
-    converter = _get_converter()
-    result = converter(str(path))
-    markdown = result.markdown
+    markdown = pymupdf4llm.to_markdown(str(path))
     return [
         Document(
             page_content=markdown,

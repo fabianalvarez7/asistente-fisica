@@ -2,6 +2,8 @@
 
 **Documento de trabajo** para la Entrega 2 (Primer Avance: Maquetación del Prototipo). **Sección 3:** Especificación Técnica. **Estado:** borrador inicial. **Última actualización:** 2026-08-07.
 
+> **Aviso (2026-09-08)**: las menciones a `marker-pdf`/`surya` en este documento reflejan una decisión que fue revertida en septiembre 2026 (ver `docs/adr/0001-pdf-loader-marker.md` para la historia completa). El loader vigente es `pymupdf4llm`. El resto de la propuesta sigue vigente.
+
 ## Avance de desarrollo
 
 **El prototipo se encuentra funcional y desplegado en https://huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr**. La mecánica principal del chat está operativa tanto en entorno local (`uvicorn app.main:app --reload`) como en producción (Hugging Face Spaces, contenedor Docker `cpu-basic`). Lo que sigue describe los componentes preliminares que ya están resueltos y los placeholders explícitos que se mantienen para iteraciones posteriores.

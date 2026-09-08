@@ -40,8 +40,10 @@ CANONICAL_PDFS = [
 def _check_canonical_corpus(pdfs_dir: Path) -> None:
     """Abort if any canonical PDF is missing.
 
-    The 5-PDF set is the canonical corpus for the marker-pdf-loader change.
-    See openspec/changes/marker-pdf-loader/spec.md § Single-Corpus Source.
+    The 5-PDF set is the canonical corpus for the project — the core
+    source material that must always be present. See AGENTS.md §4 (stack)
+    and the 2026-08-06-marker-pdf-loader change spec for the rationale
+    (now archived; superseded by ADR 0001).
     """
     missing = [p for p in CANONICAL_PDFS if not (pdfs_dir / p).exists()]
     if missing:

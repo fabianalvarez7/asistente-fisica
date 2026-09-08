@@ -1,13 +1,14 @@
 # ADR 0001: Cambio de PDF loader de pymupdf4llm a marker-pdf
 
-- **Estado**: SUPERSEDED
+- **Estado**: SUPERSEDED (revertido 2 veces)
 - **Fecha original**: 2026-06-24
-- **Fecha de supersesión**: 2026-06-30
+- **Fecha de supersesión**: 2026-06-30 (1ª reversión a pymupdf4llm)
+- **Fecha de 2ª supersesión**: 2026-09-08 (2ª reversión a pymupdf4llm)
 - **Sesión original**: bootstrap semana 1-2
 
-> **Este ADR documenta una decisión que fue revertida.** Conservado por trazabilidad histórica. La decisión vigente está en el código (`rag/loaders/pdf_loader.py` usa `pymupdf4llm`) y en `requirements.txt` (marker-pdf comentado como plan B). Ver la sección "Por qué se revirtió" al final.
+> **Este ADR documenta una decisión que fue revertida dos veces.** Conservado por trazabilidad histórica. La decisión vigente está en el código (`rag/loaders/pdf_loader.py` usa `pymupdf4llm`) y en `requirements.txt` (marker-pdf NO está instalado).
 >
-> **Plan B vigente**: marker-pdf sigue siendo la alternativa si `pymupdf4llm` pierde fórmulas o imágenes en un futuro corpus. No se incluye en el runtime image (Docker) ni en el flujo de indexación por defecto.
+> **Lecciones aprendidas**: el problema de rendimiento de marker-pdf es estructural (text-recognition ~12 min/elemento en hardware de consumidor, no en H100 como en sus benchmarks). No se debe reintroducir marker-pdf para el prototipo sin antes medir el costo real con un PDF representativo.
 
 ## Contexto
 
@@ -80,7 +81,9 @@ Para los PDFs escaneados puros del corpus inicial (`04-clase-09-04-2025.pdf`, `0
 - Modelos cacheados en singleton (`_CONVERTER`) — no se recargan entre llamadas.
 - `disable_image_extraction=True` para no llenar `data/` de imágenes que no usamos.
 
-## Por qué se revirtió (2026-06-30)
+## Por qué se revirtió
+
+### 1ª reversión (2026-06-30)
 
 En la práctica, marker-pdf presentó tres problemas que pesaron más que la calidad de OCR:
 
@@ -89,3 +92,36 @@ En la práctica, marker-pdf presentó tres problemas que pesaron más que la cal
 3. **Calidad de OCR en PDFs escaneados igual de mala**: los benchmarks oficiales asumen PDFs "limpios"; los PDFs escaneados de la cátedra (los únicos con los que probamos) producen alucinaciones independientemente del loader.
 
 El cuadernillo (único PDF que indexamos, ver decisión sobre corpus) tiene texto seleccionable limpio, así que `pymupdf4llm` lo maneja sin perder fórmulas relevantes para la demo. Si en el futuro se suma material escaneado de calidad, se re-evalúa marker-pdf (mantenido como plan B comentado en `requirements.txt`).
+
+### 2ª reversión (2026-09-08)
+
+Después de la 1ª reversión se re-introdujo marker-pdf para el corpus canónico (Cinemática 1/2, Dinámica 1/2, cuadernillo) cuando se necesitó re-indexar — los benchmarks de marker-pdf (H100, 2.84s/pg) eran prometedores y se asumió que el rendimiento sería proporcionalmente mejor en hardware de consumidor. **No fue así**.
+
+Mediciones concretas en Mac con MPS (Apple Silicon), septiembre 2026:
+
+| Fase marker-pdf | Tiempo medido |
+|---|---|
+| Layout recognition (surya) | ~11s/página |
+| OCR error detection | ~0.4s/bloque |
+| Bounding-box detection | ~2.7s/bloque |
+| **Text recognition** | **~12 min/elemento** (1405 elementos × 66 páginas) |
+
+Para el corpus nuevo pendiente (4 PDFs), la proyección era:
+
+| PDF | Páginas | Proyección total |
+|---|---|---|
+| Trabajo y energía | 66 | ~282 horas |
+| Momento Lineal y choques | ~95 | ~400 horas |
+| Movimiento periódico | ~50 | ~210 horas |
+| Cuerpo rígido | ~165 | ~700 horas |
+| **Total** | ~376 | **~1,591 horas (~66 días)** |
+
+Esto es estructural: text-recognition corre un modelo pesado (surya-ocr) por elemento, no por bloque. Los benchmarks oficiales de marker-pdf usan H100 con batch sizes optimizados; en MPS/CPU de consumidor el throughput cae ~3 órdenes de magnitud.
+
+**Decisión**: se mantiene `pymupdf4llm` como loader del prototipo. El tradeoff conocido — fórmulas-imagen se pierden — es aceptable porque:
+
+1. `data/markdown/formulas.md` complementa el catálogo de fórmulas del curso.
+2. El asistente es Socrático: guía con preguntas, no es un OCR de fórmulas. La fórmula concreta la aporta el PDF de teoría o el cuadernillo del estudiante.
+3. Cargar 4 PDFs en 2 minutos vs. 66 días no es negociable en un prototipo iterativo.
+
+Si en el futuro se necesita OCR de fórmulas-imagen de alta calidad, evaluar **Mathpix API** (1000 páginas/mes gratis) en lugar de marker-pdf local.

@@ -1,13 +1,15 @@
 # corpus-rebake Specification
 
-> **Updated capability spec** — last updated by the `marker-pdf-loader` change on `2026-08-06`.
+> **Updated capability spec** — last updated on `2026-09-08` after reverting `marker-pdf` → `pymupdf4llm` (perf inviable on consumer hardware; see `docs/adr/0001-pdf-loader-marker.md`).
 > Source: `openspec/changes/archive/2026-08-06-marker-pdf-loader/specs/corpus-rebake/spec.md`
 > First archived: `deploy-hf-spaces` change on `2026-06-28`.
 > Future changes to this capability SHOULD create a delta spec against this file.
 
 ## Purpose
 
-Produce a fresh ChromaDB index baked from a 5-PDF canonical corpus (plus optional `formulas.md`) and committed to `rag/index/chroma/`. The index is built with the `marker-pdf` PDF loader (1.10.2+), which recovers LaTeX formulas that the previous `pymupdf4llm` loader lost. The re-bake is required on corpus change or loader swap, runs locally with `python scripts/indexar_pdfs.py --reset`, and takes 5-7 hours on Mac MPS for the 5-PDF corpus (a single `Recognizing Text` pass alone can take 1-2 hours per chapter). The result MUST pass `python scripts/verify_latex.py` (≥2000 LaTeX occurrences NFR) before being committed to the deploy path. Deploy-target-agnostic and MUST NOT change backend code (`rag/chain.py`, retrievers, `app/main.py`); it only re-runs the existing indexing script and commits the result.
+Produce a fresh ChromaDB index baked from the project's PDF corpus (current state: 10 PDFs in `data/pdfs/` plus optional `formulas.md`) and committed to `rag/index/chroma/`. The index is built with the `pymupdf4llm` PDF loader, which is fast (~10-20 seconds per 60-page PDF on Mac MPS) but does NOT recover formulas rendered as images in the source PDF. The re-bake is required on corpus change or loader swap, runs locally with `python scripts/indexar_pdfs.py --reset`, and completes in under 5 minutes on Mac MPS for the current corpus. The result MUST be a non-empty `data/chroma/` (≥ 1 chunk) before being committed. Deploy-target-agnostic and MUST NOT change backend code (`rag/chain.py`, retrievers, `app/main.py`); it only re-runs the existing indexing script and commits the result.
+
+> **Removed NFR (was: ≥2000 LaTeX occurrences via `scripts/verify_latex.py`)**: the previous marker-pdf-derived NFR no longer applies; `pymupdf4llm` cannot recover formulas-as-images. The script now reports LaTeX counts per source as informational only. `data/markdown/formulas.md` supplements the gap.
 
 ## Requirements
 
@@ -70,70 +72,59 @@ The fresh index SHALL be committed to `rag/index/chroma/` (tracked in git) so lo
 
 ### Requirement: Reproducible Re-bake Workflow
 
-The re-bake SHALL be reproducible from a clean clone by a documented two-step command sequence: (1) `python scripts/indexar_pdfs.py --reset` to re-bake `data/chroma/`, then (2) `python scripts/verify_latex.py` to assert the NFR ≥2000 LaTeX occurrences. The workflow SHALL be documented in `docs/hf-space.md`. The bake takes 5-7h on Mac MPS (a single chapter's `Recognizing Text` stage alone can take 1-2 hours because marker-pdf processes ~12 sub-blocks per page, not 1 per page). The workflow SHALL NOT require network access beyond the corpus files in `data/pdfs/` and the model snapshot already baked into the Docker image.
+The re-bake SHALL be reproducible from a clean clone by a documented two-step command sequence: (1) `python scripts/indexar_pdfs.py --reset` to re-bake `data/chroma/`, then (2) `python scripts/verify_latex.py` to confirm the bake is non-empty (informational — see NFR note below). The workflow SHALL be documented in `docs/hf-space.md`. The bake completes in under 5 minutes on Mac MPS for the current 10-PDF corpus. The workflow SHALL NOT require network access beyond the corpus files in `data/pdfs/` and the embedding model snapshot already baked into the Docker image (`rag/index/hf-model/`). No PDF-loader model download is required because the loader is `pymupdf4llm`.
 
 #### Scenario: Clean-clone re-bake
 
-- GIVEN a fresh clone of the repo (with the 5 canonical PDFs in `data/pdfs/`)
+- GIVEN a fresh clone of the repo (with the PDFs in `data/pdfs/`)
 - WHEN the documented re-bake command sequence runs
-- THEN a fresh `data/chroma/` is produced with 1374 chunks
-- AND `verify_latex.py` exits 0 with total ≥2000
+- THEN a fresh `data/chroma/` is produced (~4668 chunks for the current 10-PDF + `formulas.md` corpus as of 2026-09-08)
+- AND `verify_latex.py` exits 0 (informational pass — see NFR note)
 - AND the developer did not manually edit env vars or path constants
 
 #### Scenario: Corpus change re-bake
 
-- GIVEN one of the 5 canonical PDFs is updated (e.g., a new edition is dropped in)
+- GIVEN one of the corpus PDFs is updated (e.g., a new edition is dropped in)
 - WHEN the developer re-runs the documented re-bake and copies `data/chroma/` to `rag/index/chroma/`
 - THEN the next deploy serves the updated corpus
 - AND `docs/hf-space.md` documents that the baked index must be re-committed on corpus change
 
-### Requirement: PDF Loader Uses marker-pdf
+### Requirement: PDF Loader Uses pymupdf4llm
 
-The PDF loader at `rag/loaders/pdf_loader.py` SHALL use `marker-pdf` (1.10.2+) to extract markdown from PDFs. The `pymupdf4llm` library SHALL NOT be imported or used anywhere in the project. The loader SHALL expose a `load_pdf(path) -> list[Document]` signature unchanged from the previous implementation (caller compatibility in `indexar_pdfs.py` and `chain.py`).
+The PDF loader at `rag/loaders/pdf_loader.py` SHALL use `pymupdf4llm` to extract markdown from PDFs. The `marker-pdf` library SHALL NOT be imported or used anywhere in the project (including transitive deps via `requirements.txt`). The loader SHALL expose a `load_pdf(path) -> list[Document]` signature unchanged from the previous implementation (caller compatibility in `indexar_pdfs.py` and `chain.py`).
 
-#### Scenario: Loader swap to marker-pdf
+#### Scenario: Loader uses pymupdf4llm
 
 - GIVEN the loader is at `rag/loaders/pdf_loader.py`
 - WHEN the loader is called with a PDF path
-- THEN it returns a list of `Document` objects whose `page_content` is markdown extracted by `marker-pdf` (including LaTeX formulas)
-- AND `grep -r "pymupdf4llm" --include="*.py" .` returns 0 project hits (only the dev `.venv/` may contain the installed package as a harmless leftover)
+- THEN it returns a list of `Document` objects whose `page_content` is markdown extracted by `pymupdf4llm` (text + inline LaTeX; NOT formulas-as-images)
+- AND `grep -rn "marker-pdf\|surya" --include="*.py" --include="*.txt" rag/ scripts/ app/ dashboard/ docs/` returns 0 hits (excluding the historical ADR `0001-pdf-loader-marker.md`)
 
-### Requirement: Singleton PdfConverter
+### Requirement: No PDF Loader Model Required
 
-The `PdfConverter` instance SHALL be a module-level singleton (`_CONVERTER`) with lazy initialization. The first call to `load_pdf()` triggers `create_model_dict()` and constructs the converter; subsequent calls reuse the same instance, amortizing the ~10 GB RAM peak model load across all PDFs in the corpus.
+The `pymupdf4llm` loader SHALL NOT require any model download, snapshot bake, or large dependency in the Docker image. The `Dockerfile` SHALL NOT include any step that downloads or caches `marker-pdf` / `surya-ocr` / or any other PDF-OCR model. The runtime `ENV` block SHALL NOT reference `MODEL_CACHE_DIR` (a marker-pdf relic).
 
-#### Scenario: Singleton reuses one model load
+#### Scenario: Cold-start does not load PDF models
 
-- GIVEN the loader has been called once on any PDF
-- WHEN the loader is called again on a different PDF
-- THEN the same `_CONVERTER` instance is used (no second `create_model_dict()` call)
-- AND no second model download occurs
-
-### Requirement: marker-pdf Models Baked in Docker
-
-The `Dockerfile` SHALL pre-bake the `marker-pdf` / `surya-ocr` model snapshot (~3.45 GB) at build time so the deployed HF Space does not download models on every cold start. The `RUN python -c "from marker.models import create_model_dict; create_model_dict()"` step MUST run with `MODEL_CACHE_DIR=/app/rag/index/marker-models` and `TORCH_DEVICE_MODEL=cpu` (HF Spaces is CPU-only). The runtime `ENV` block MUST also set `MODEL_CACHE_DIR=./rag/index/marker-models` so the app loads from the baked path.
-
-#### Scenario: Cold-start does not re-download
-
-- GIVEN the Docker image has been built and the marker models are baked at `/app/rag/index/marker-models`
+- GIVEN the Docker image has been built with the current loader stack
 - WHEN the Space boots and the first `/chat` request arrives
-- THEN the model load reads from the local baked path
-- AND no HTTP request is made to download models
+- THEN no PDF-loader model load occurs (pymupdf4llm is a thin wrapper over PyMuPDF)
+- AND no HTTP request is made to download PDF models
 
 ### Requirement: Formula-Aware Retrieval Smoke Test
 
-The `scripts/run_socratic_tests.py` smoke test suite SHALL include a `test_formula_retrieval()` function that asserts a formula-aware query (e.g., "fórmula de velocidad media") returns chunks containing LaTeX (`$` characters) in the top-3 retrieved results. The test SHALL print PASS/FAIL with chunk previews. The assertion MAY be non-fatal (continue after FAIL) for manual review workflows.
+The `scripts/run_socratic_tests.py` smoke test suite SHALL include a `test_formula_retrieval()` function that asserts a formula-aware query (e.g., "fórmula de velocidad media") returns relevant chunks in the top-3 retrieved results. The chunks MAY come from `data/markdown/formulas.md` (the supplement) when the source PDF has formulas-as-images that `pymupdf4llm` cannot recover. The test SHALL print PASS/FAIL with chunk previews. The assertion MAY be non-fatal (continue after FAIL) for manual review workflows.
 
-#### Scenario: Formula query returns LaTeX chunks
+#### Scenario: Formula query returns relevant chunks
 
 - GIVEN a freshly baked `data/chroma/` index
 - WHEN `python scripts/run_socratic_tests.py` runs and `test_formula_retrieval()` is called
-- THEN at least 1 of the top-3 retrieved chunks contains a `$` character
+- THEN at least 1 of the top-3 retrieved chunks is relevant to the formula query
 - AND the test prints PASS with the chunk previews
 
-### Requirement: LaTeX NFR Assertion Script
+### Requirement: Bake Completeness Report Script
 
-A `scripts/verify_latex.py` script SHALL exist and SHALL assert that the freshly baked ChromaDB has ≥2000 LaTeX occurrences (display + inline, summed across all 5 indexed PDFs). The script SHALL print a per-source breakdown and exit with code 0 on PASS or 1 on FAIL.
+A `scripts/verify_latex.py` script SHALL exist and SHALL report per-source LaTeX (`$` and `$$`) counts across all chunks in the freshly baked ChromaDB. The script SHALL exit with code 0 if the store is non-empty (≥ 1 chunk) and 1 if the store is empty. The previous ≥2000 LaTeX NFR was tied to the `marker-pdf` loader and is no longer applicable with `pymupdf4llm`; the script now reports counts as informational only (PDFs with formulas-as-images will show 0 by design — see ADR `0001-pdf-loader-marker.md`).
 
 #### Scenario: Fresh index passes the NFR
 

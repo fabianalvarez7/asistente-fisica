@@ -237,7 +237,7 @@ These are the questions we have not yet answered. Some of them are blocking for 
 - [x] **Faculty server for deploy?** Resolved 2026-06-30: we ship to HF Spaces Docker (`cpu-basic`, 16 GB). See decision #8 / #11 in §7 and `docs/hf-space.md` for the deploy runbook. Revisit if the faculty offers a maintained institutional URL.
 - [ ] **Language of the code** (English vs Spanish for variable names, comments, commit messages). Default if no decision: English (industry standard, easier to search).
 - [ ] **Nair's checkpoint cadence** — formal reviews or informal demos? Affects the Definition of Done for each milestone.
-- [ ] **PDF processing tool** — start with `pymupdf4llm`, but evaluate `marker-pdf` and `docling` if formulas and diagrams are lost in the first indexation.
+- [x] **PDF processing tool** — Resolved 2026-09-08: `pymupdf4llm` after the 2nd revert from `marker-pdf` (perf inviable on consumer hardware, ~12 min/element in text-recognition). Tradeoff: fórmulas-imagen se pierden, compensado parcialmente por `data/markdown/formulas.md`. Si en el futuro se necesita OCR de fórmulas-imagen, evaluar **Mathpix API** (1000 páginas/mes gratis). Full history in `docs/adr/0001-pdf-loader-marker.md`.
 - [ ] **Socratic layer design** — system prompt structure, few-shot examples, how to handle the "I really want the answer" student. Month 3 work, but worth thinking from month 1.
 - [ ] **Professor dashboard metrics** — which questions matter? Most-asked topics, students who are stuck, low-rated answers? Need Nair's input. Month 4 work.
 - [ ] **Authentication strategy** — simple user/pass in SQLite? Magic link? Depends on faculty IT. Month 3 work.

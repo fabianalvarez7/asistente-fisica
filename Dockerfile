@@ -29,19 +29,10 @@ RUN mkdir -p /app/rag/index/hf-model && \
     python scripts/preparar_indice_hf.py && \
     chown -R user:user /app/rag/index/hf-model
 
-# Pre-download marker-pdf/surya models at build time (~3.5 GB). Same
-# pattern as the embedding model: bake once, no network round-trip on
-# first /chat request after Space sleep. The cache is NOT committed to
-# git (too large); it lives in the image layer.
-RUN mkdir -p /app/rag/index/marker-models && \
-    MODEL_CACHE_DIR=/app/rag/index/marker-models \
-    TORCH_DEVICE_MODEL=cpu \
-    python -c "from marker.models import create_model_dict; create_model_dict()" && \
-    chown -R user:user /app/rag/index/marker-models
-
-# Copy app code and the pre-baked ChromaDB index. The HF model and marker
-# models are excluded from the build context via .dockerignore (already
-# downloaded above, so we never overwrite with stale local copies).
+# Copy app code and the pre-baked ChromaDB index. The HF model is excluded
+# from the build context via .dockerignore (already downloaded above, so we
+# never overwrite with stale local copies). PDF loader is pymupdf4llm (no
+# model download required) — see docs/adr/0001-pdf-loader-marker.md.
 COPY --chown=user . .
 
 # Non-sensitive runtime config. Sensitive vars (GROQ_API_KEY) are injected as
@@ -49,8 +40,6 @@ COPY --chown=user . .
 ENV CHROMA_PERSIST_DIR=./rag/index/chroma
 ENV HF_HOME=./rag/index/hf-model
 ENV SENTENCE_TRANSFORMERS_HOME=./rag/index/hf-model
-ENV MODEL_CACHE_DIR=./rag/index/marker-models
-ENV TORCH_DEVICE_MODEL=cpu
 ENV OMP_NUM_THREADS=1
 ENV TOKENIZERS_PARALLELISM=false
 ENV LLM_MODEL=llama-3.3-70b-versatile

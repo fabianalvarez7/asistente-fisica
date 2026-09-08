@@ -29,7 +29,7 @@ Lo que vas a lograr al final de la semana 2:
 - [ ] Copiar los 8 PDFs de Nair a `data/pdfs/` (esta carpeta está gitignored).
 - [ ] Instalar `pymupdf4llm` y probar con UN PDF primero.
 - [ ] Crear `rag/loaders/__init__.py` y `rag/loaders/pdf_loader.py` que lea PDFs y devuelva Markdown.
-- [ ] Probar con los 8 PDFs. **Si las fórmulas se ven mal, evaluar `marker-pdf` o Mathpix** (ver Gotchas abajo).
+- [ ] Probar con los 8 PDFs. **Si las fórmulas se ven mal, evaluar `Mathpix` (1000 páginas/mes gratis, excelente calidad)** (ver Gotchas abajo). Probamos `marker-pdf` y se descartó por costo de OCR (~12 min/elemento en Mac); ver ADR 0001.
 
 ### Días 4-5: Chunking + Embeddings + ChromaDB
 
@@ -92,7 +92,7 @@ Irá creciendo a medida que agregues FastAPI, Streamlit, etc. **No metas depende
 ## Gotchas que vas a encontrar (leé esto ANTES de que te traben)
 
 - **MPS en Mac Apple Silicon**: si `sentence-transformers` no usa MPS, revisá que PyTorch tenga soporte MPS. `pip install --upgrade torch` suele alcanzar. Verificá con el comando de arriba.
-- **PDFs con imágenes/fórmulas**: si `pymupdf4llm` devuelve markdown sin imágenes ni fórmulas visibles, las fórmulas en imágenes no se indexan. **Ahí evaluás `marker-pdf` o Mathpix** (free tier 1000 páginas/mes). No es el fin del mundo si arranca parcial — el AGENTS.md dice RAG parcial primero.
+- **PDFs con imágenes/fórmulas**: si `pymupdf4llm` devuelve markdown sin imágenes ni fórmulas visibles, las fórmulas en imágenes no se indexan. **Ahí evaluás Mathpix** (free tier 1000 páginas/mes, excelente calidad) — ver ADR 0001 para la historia completa. No es el fin del mundo si arranca parcial — el AGENTS.md dice RAG parcial primero.
 - **Fórmulas en LaTeX**: `pymupdf4llm` suele preservarlas. Si el retrieval no las encuentra, es tema del chunking, no del loader.
 - **Primera indexación lenta**: con 8 PDFs está bien, pero si crece, considerá hacerlo en background.
 - **ChromaDB persistente**: si cambiás `CHROMA_PERSIST_DIR`, la colección "se pierde" (archivo huérfano). Cada vez que cambiás el path, reindexá.

@@ -61,6 +61,9 @@ coverage.xml
 *.cover
 .hypothesis/
 
+# Background job logs (e.g. logs/indexar_trabajo_energia.log)
+logs/
+
 # Type checking / linters
 .mypy_cache/
 .ruff_cache/
