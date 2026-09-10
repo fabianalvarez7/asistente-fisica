@@ -75,6 +75,19 @@
 
 **Si pasa otra vez con un tipo de excepción distinto**: probablemente `libsql_experimental` haya agregado un nuevo tipo de error (ej. `ConnectionError`). Sumalo a `_LIBSQL_ERRORS` arriba, **no** lo metas directo en el `except (...)` del decorador — mantenerlo data-driven hace que sea imposible olvidar el camino del import. Antes de tocar nada, mirá los logs del Space (HF Spaces → tab Logs) — la excepción cruda está ahí, solo que el endpoint la enmascara con `DB_ERROR_MESSAGE` cuando `PRODUCTION=true`.
 
+### `GROQ_API_KEY` rotada pasa el boot check pero rompe el chat silenciosamente
+
+**Qué pasa**: el chat devuelve `event: error\ndata: Ocurrió un error, intentá de nuevo\n\n` (el `_FALLBACK_ERROR` de `chain.py`) y el error queda enmascarado. Los logs del Space muestran 200 OK en `/chat` sin traceback porque la excepción se atrapa en el `except Exception` de `chain.py:180` antes de loguearse. Lo único que se ve es: la conexión a Turso anda, el user message se guarda, el assistant message se guarda con el texto del fallback.
+
+**Por qué**: el boot check en `app/main.py:57` valida con `if not os.getenv("GROQ_API_KEY")` — eso solo detecta que la variable **no esté vacía**. Una key inválida o rotada sigue siendo un string no vacío, pasa el check, y recién falla en la llamada real a la API de Groq con `401 invalid_api_key`. La excepción se loguea solo en la rama dev de `chain.py:186` (cuando `PRODUCTION` no es truthy).
+
+**Workaround / diagnóstico**:
+1. **Borrar o poner en `0` el Space Secret `PRODUCTION` momentáneamente**. La rama dev de `chain.py:186` mete la excepción real en el SSE: `event: error\ndata: Error code: 401 - ...`. Con `curl -N` al `/chat` se ve directo. **No olvidar restaurar `PRODUCTION=1` después.**
+2. Cuando se rota la API key de Groq (o de cualquier proveedor), hay que actualizar el Space Secret `GROQ_API_KEY` en HF Spaces. Los `.env` locales y los Space Secrets son **fuentes independientes** — renovarla en uno no actualiza al otro.
+3. Si querés que el boot check también detecte keys inválidas (no solo vacías), se puede hacer un ping tipo `client.models.list()` al startup. Tradeoff: agrega latencia de boot y depende de que el endpoint `/models` exista. Por ahora el workaround manual es más simple.
+
+**Cómo NO nos morde otra vez**: cuando se renueve la `GROQ_API_KEY` en `console.groq.com`, recordar actualizar **dos** lugares: (1) tu `.env` local, (2) el Space Secret `GROQ_API_KEY` en HF. El test rápido post-deploy es un `curl -N https://<space>.hf.space/chat` con cualquier query — si devuelve `_FALLBACK_ERROR`, la key está mal.
+
 ## Splitter (RecursiveCharacterTextSplitter)
 
 ### Puede cortar fórmulas LaTeX por la mitad
