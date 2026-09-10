@@ -42,7 +42,7 @@ ENV HF_HOME=./rag/index/hf-model
 ENV SENTENCE_TRANSFORMERS_HOME=./rag/index/hf-model
 ENV OMP_NUM_THREADS=1
 ENV TOKENIZERS_PARALLELISM=false
-ENV LLM_MODEL=llama-3.3-70b-versatile
+ENV LLM_MODEL=openai/gpt-oss-120b
 
 # /app/data: kept for any future ephemeral data the backend may write at
 # runtime. Conversation history is now persisted in Turso (libSQL remote DB),

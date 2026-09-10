@@ -220,7 +220,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 | `TURSO_AUTH_TOKEN` | No (dev) / Yes (deploy) | — | Turso auth token. Required in production as an HF Space Secret; dev falls back to `SQLITE_PATH` when unset. |
 | `SQLITE_PATH` | No | `./data/historial.db` | Local SQLite fallback for conversation history. Dev-only; not used in production.
 | `EMBEDDINGS_DEVICE` | No | `auto` | `auto` picks MPS (macOS) / CUDA (Windows with GPU) / CPU. Set explicitly if needed. |
-| `LLM_MODEL` | No | `llama-3.3-70b-versatile` | The Groq model used for the chat. |
+| `LLM_MODEL` | No | `openai/gpt-oss-120b` | The Groq model used for the chat. |
 | `HISTORY_WINDOW` | No | `10` | Number of recent messages injected into the Groq prompt. Set to `0` to disable history injection and restore single-turn behavior. |
 | `PRODUCTION` | No | unset | If set to any value, suppresses the dev-mode console dump of the assembled messages list used for manual review. |
 | `HF_HOME` | No | `./rag/index/hf-model` | Cache for huggingface_hub; points to the pre-baked model snapshot. |

@@ -213,7 +213,7 @@ Después seguir el "Workflow de redeploy" arriba para llevar el nuevo bake al Sp
 | `CHROMA_PERSIST_DIR` | `Dockerfile` ENV | `./rag/index/chroma` en el Space. |
 | `HF_HOME` | `Dockerfile` ENV | `./rag/index/hf-model`. |
 | `SENTENCE_TRANSFORMERS_HOME` | `Dockerfile` ENV | Igual que `HF_HOME`. |
-| `LLM_MODEL` | `Dockerfile` ENV | `llama-3.3-70b-versatile`. |
+| `LLM_MODEL` | `Dockerfile` ENV | `openai/gpt-oss-120b` (Groq deprecó `llama-3.3-70b-versatile`, septiembre 2026). |
 | `OMP_NUM_THREADS` | `Dockerfile` ENV | `1` para no saturar la CPU. |
 | `TOKENIZERS_PARALLELISM` | `Dockerfile` ENV | `false` para estabilidad de memoria. |
 
