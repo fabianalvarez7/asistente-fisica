@@ -35,6 +35,23 @@ _VALID_ROLES = ("user", "assistant")
 _connection = None
 _connection_lock = threading.Lock()
 
+#: libsql_experimental is the Turso/libSQL driver used in production. It defines
+#: its own exception class (``libsql_experimental.Error``) which inherits from
+#: ``Exception`` -- NOT from the ``sqlite3`` hierarchy. We add it to the
+#: ``_reconnect_on_failure`` catch-list so a stale Turso handle triggers a
+#: reconnect instead of bubbling up as a 503.
+#:
+#: The import is wrapped in try/except so local dev (which uses plain
+#: ``sqlite3`` and doesn't have the package installed) keeps working. When the
+#: import fails, ``_LIBSQL_ERRORS`` is empty and the reconnect logic only
+#: catches ``sqlite3`` errors.
+try:
+    import libsql_experimental as _libsql
+
+    _LIBSQL_ERRORS = (_libsql.Error,)
+except ImportError:  # pragma: no cover - dev environment without libsql
+    _LIBSQL_ERRORS = ()
+
 
 def _get_connection():
     """Return a cached DB connection (Turso if creds set, else local SQLite)."""
@@ -49,9 +66,7 @@ def _get_connection():
         url = os.getenv(_TURSO_URL_ENV)
         token = os.getenv(_TURSO_TOKEN_ENV)
         if url and token:
-            import libsql_experimental as libsql
-
-            _connection = libsql.connect(url, auth_token=token)
+            _connection = _libsql.connect(url, auth_token=token)
         else:
             db_path = os.getenv(_SQLITE_PATH_ENV, _DEFAULT_DB_PATH)
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -91,23 +106,34 @@ def _reconnect_on_failure(func):
     """Decorator: retry the wrapped function once after rebuilding the
     connection.
 
-    Catches the SQLite connection-level errors (``OperationalError`` and
-    the broader ``DatabaseError``) that signal a stale handle — Turso
-    TTL expiry, network blip, container sleep/wake, etc. — drops the
-    cached connection, and re-invokes the function so ``_get_connection``
-    builds a fresh one. Other exceptions (``ProgrammingError`` on bad
-    SQL, ``IntegrityError`` on constraint violations) propagate
-    unchanged because they are not connection issues.
+    Catches the connection-level errors that signal a stale handle — Turso
+    TTL expiry, network blip, container sleep/wake, etc. — drops the cached
+    connection, and re-invokes the function so ``_get_connection`` builds a
+    fresh one. Other exceptions (``ProgrammingError`` on bad SQL,
+    ``IntegrityError`` on constraint violations) propagate unchanged
+    because they are not connection issues.
 
-    If ``libsql_experimental`` starts raising exception types outside
-    the ``sqlite3`` hierarchy, extend the ``except`` tuple below — see
-    ``docs/gotchas.md`` for the failure mode this guards against.
+    The catch list is:
+
+    * ``sqlite3.OperationalError`` and ``sqlite3.DatabaseError`` for the
+      local SQLite dev path.
+    * ``libsql_experimental.Error`` for the Turso production path. This
+      class is NOT in the ``sqlite3`` hierarchy — it inherits from
+      ``Exception`` directly — so it has to be added explicitly. Omitting
+      it was the bug behind the 503 on ``/history`` after a Space
+      sleep/wake cycle. See ``docs/gotchas.md`` for the original failure
+      mode.
+
+    If ``libsql_experimental`` ever adds more exception types (e.g. a
+    distinct ``ConnectionError`` subclass), add them to ``_LIBSQL_ERRORS``
+    above — never silently let a connection-level error bubble up to the
+    endpoint and become a 503.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (sqlite3.OperationalError, sqlite3.DatabaseError):
+        except (sqlite3.OperationalError, sqlite3.DatabaseError, *_LIBSQL_ERRORS):
             _reset_connection()
             return func(*args, **kwargs)
     return wrapper
