@@ -63,17 +63,20 @@
 
 ## History layer (Turso / SQLite)
 
-### La conexión cacheada puede quedar stale y matar todos los endpoints
+### La conexión de historial puede quedar stale o no responder
 
-**Qué pasa**: de repente, `GET /history` y `POST /chat` empiezan a devolver 503 (`"No se pudo guardar la conversación. Reintentá en un momento."` en prod, `"DB error: OperationalError(...)"` en dev). Los assets estáticos cargan bien, el contenedor está vivo, pero **toda la capa de DB falla** hasta que se reinicia el contenedor.
+**Qué pasa ahora**: si una operación de Turso o SQLite falla dos veces, el chat la saltea en vez de devolver 503. Cada lectura o escritura degrada de forma independiente: `POST /chat` usa el historial que logra leer, conserva las escrituras que sí completan y sigue generando; solo usa historial vacío si falla esa lectura. Una escritura fallida no se persiste ni recibe id. Si falla alguna operación de `GET /history`, ese endpoint responde `{"messages": []}` aunque operaciones anteriores puedan haber completado. No existe backfill automático.
 
-**Por qué**: `rag/history.py` cachea la conexión (Turso o SQLite) a nivel de módulo (`_connection = None`). Si esa conexión muere — TTL de Turso, blip de red, sleep/wake del Space, o un `kill -9` interno del driver — el módulo sigue devolviendo el handle roto porque `_connection is not None`, y cada llamada subsiguiente tira un error de conexión.
+**Por qué**: `rag/history.py` cachea la conexión a nivel de módulo. `_reconnect_on_failure` descarta un handle fallido y reintenta una vez. En SQLite solo degrada códigos numéricos de disponibilidad; SQL mal formado y tablas faltantes siguen propagándose como defectos. `libsql-experimental 0.0.55` expone una única clase `Error`, sin subtipo o código estable: después del reintento se prioriza mantener el chat disponible, aun sabiendo que el diagnóstico es menos preciso.
 
-**Workaround**: el decorador `_reconnect_on_failure` (en `rag/history.py`) envuelve cada función pública del módulo. Si la primera llamada tira un error de conexión, descarta la conexión cacheada y reintenta la función una vez — `_get_connection` ve `_connection is None` y arma una conexión nueva. Si el reintento también falla, la excepción se propaga como siempre.
+**Señal segura**: cada degradación escribe un log nivel `ERROR` con `operation`, `wrapper_type` y `root_cause_type`. Nunca registra texto de la excepción, nombres, preguntas, respuestas, SQL, URLs, tokens ni secretos. Para el prototipo pre-demo, revisar manualmente los logs del Space antes y después del ensayo. Alertas automáticas/Sentry quedan como seguimiento post-demo.
 
-**Qué errores atrapa**: el decorador mira la constante `_LIBSQL_ERRORS` (definida arriba en el módulo) más `sqlite3.OperationalError` y `sqlite3.DatabaseError`. La constante se popula en el import del módulo con `libsql_experimental.Error` si el driver está instalado, y queda vacía en dev local. Esto es importante porque **`libsql_experimental.Error` NO está en la jerarquía de `sqlite3`** — su MRO es `['Error', 'Exception', 'BaseException', 'object']`. Si te equivocás y dejás solo las excepciones de `sqlite3`, el reconnect **nunca se dispara** en producción y cada sleep/wake del Space te tira 503 hasta el próximo deploy.
+**Runbook pre-demo**:
+1. Despertar el Space con anticipación, abrir un chat, enviar una pregunta, recargar y confirmar que el turno aparece en el historial. Revisar que no haya logs `History unavailable`.
+2. Si Turso falla de forma sostenida, quitar temporalmente **ambas** variables de Turso y reiniciar el Space para activar SQLite local de manera explícita. Nunca hacer fallback automático con una identidad Turso activa.
+3. Asumir el tradeoff: ese historial local es efímero, puede perderse al dormir/reiniciar el Space y no se sincroniza de vuelta a Turso. Restaurar ambas variables y reiniciar después de la contingencia.
 
-**Si pasa otra vez con un tipo de excepción distinto**: probablemente `libsql_experimental` haya agregado un nuevo tipo de error (ej. `ConnectionError`). Sumalo a `_LIBSQL_ERRORS` arriba, **no** lo metas directo en el `except (...)` del decorador — mantenerlo data-driven hace que sea imposible olvidar el camino del import. Antes de tocar nada, mirá los logs del Space (HF Spaces → tab Logs) — la excepción cruda está ahí, solo que el endpoint la enmascara con `DB_ERROR_MESSAGE` cuando `PRODUCTION=true`.
+**Riesgo aceptado**: el driver instalado no ofrece timeout ni cancelación. El modo degradado actúa cuando una llamada devuelve error, pero no puede rescatar una llamada nativa que queda bloqueada. Para la demo, la mitigación es el ensayo previo, inspección manual y la contingencia SQLite explícita; mover llamadas a threads con timeout no cancela el write y puede empeorar la concurrencia.
 
 ### `GROQ_API_KEY` rotada pasa el boot check pero rompe el chat silenciosamente
 

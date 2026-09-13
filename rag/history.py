@@ -31,6 +31,11 @@ _TURSO_TOKEN_ENV = "TURSO_AUTH_TOKEN"
 #: rejected by ``save_message`` to keep the prompt/history contract clean.
 _VALID_ROLES = ("user", "assistant")
 
+
+class HistoryUnavailableError(Exception):
+    """Raised after a persistence operation remains unavailable after retry."""
+
+
 #: Cached connection, created lazily on first use and reused across requests.
 _connection = None
 _connection_lock = threading.Lock()
@@ -51,6 +56,44 @@ try:
     _LIBSQL_ERRORS = (_libsql.Error,)
 except ImportError:  # pragma: no cover - dev environment without libsql
     _LIBSQL_ERRORS = ()
+
+_HISTORY_DRIVER_ERRORS = (sqlite3.OperationalError, *_LIBSQL_ERRORS)
+
+# SQLite reports both availability failures and SQL/schema defects as
+# OperationalError. Classify by SQLite's numeric result code so malformed SQL
+# and missing tables (SQLITE_ERROR) remain visible programming/schema failures.
+# Extended result codes retain the primary code in their low byte.
+_SQLITE_AVAILABILITY_CODES = frozenset(
+    {
+        sqlite3.SQLITE_BUSY,
+        sqlite3.SQLITE_LOCKED,
+        sqlite3.SQLITE_READONLY,
+        sqlite3.SQLITE_IOERR,
+        sqlite3.SQLITE_FULL,
+        sqlite3.SQLITE_CANTOPEN,
+        sqlite3.SQLITE_PROTOCOL,
+    }
+)
+
+
+def _is_history_availability_error(exc: Exception) -> bool:
+    """Return whether a driver error represents persistence unavailability."""
+    if _LIBSQL_ERRORS and isinstance(exc, _LIBSQL_ERRORS):
+        # libsql-experimental 0.0.55 exposes only one Error class, with no
+        # stable subtype or machine-readable code. We deliberately prefer chat
+        # availability after retry even though this can mask a driver-reported
+        # schema/auth/config defect. Never parse Error.args or its text: they
+        # may contain SQL, URLs, credentials, or other sensitive context.
+        return True
+
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+
+    error_code = getattr(exc, "sqlite_errorcode", None)
+    return (
+        error_code is not None
+        and error_code & 0xFF in _SQLITE_AVAILABILITY_CODES
+    )
 
 
 def _get_connection():
@@ -115,8 +158,7 @@ def _reconnect_on_failure(func):
 
     The catch list is:
 
-    * ``sqlite3.OperationalError`` and ``sqlite3.DatabaseError`` for the
-      local SQLite dev path.
+    * ``sqlite3.OperationalError`` for the local SQLite dev path.
     * ``libsql_experimental.Error`` for the Turso production path. This
       class is NOT in the ``sqlite3`` hierarchy — it inherits from
       ``Exception`` directly — so it has to be added explicitly. Omitting
@@ -133,9 +175,18 @@ def _reconnect_on_failure(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (sqlite3.OperationalError, sqlite3.DatabaseError, *_LIBSQL_ERRORS):
+        except _HISTORY_DRIVER_ERRORS as exc:
+            if not _is_history_availability_error(exc):
+                raise
             _reset_connection()
-            return func(*args, **kwargs)
+            try:
+                return func(*args, **kwargs)
+            except _HISTORY_DRIVER_ERRORS as retry_exc:
+                if not _is_history_availability_error(retry_exc):
+                    raise
+                raise HistoryUnavailableError(
+                    "History persistence remained unavailable after reconnect"
+                ) from retry_exc
     return wrapper
 
 

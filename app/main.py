@@ -8,7 +8,7 @@ per-student conversation history persisted by rag/history.py.
 from dotenv import load_dotenv
 load_dotenv()
 
-import json
+import logging
 import os
 
 from fastapi import FastAPI, HTTPException
@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from rag.history import (
+    HistoryUnavailableError,
     init_db,
     get_or_create_student,
     get_student_by_name,
@@ -37,6 +38,9 @@ from rag.history import (
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
 from rag.topics import load_topics
+
+
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
@@ -84,15 +88,34 @@ DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un moment
 # existing history keep their real conversation, not a greeting on every reload.
 WELCOME_MESSAGE = "¡Hola, {name}!"
 
+
+def _log_history_failure(operation: str, exc: HistoryUnavailableError) -> None:
+    """Log persistence degradation without student, chat, or secret data."""
+    root_cause = exc.__cause__
+    wrapper_type = type(exc).__name__
+    root_cause_type = (
+        type(root_cause).__name__
+        if root_cause is not None
+        else wrapper_type
+    )
+    logger.error(
+        "History unavailable; continuing in degraded mode "
+        "(operation=%s, wrapper_type=%s, root_cause_type=%s)",
+        operation,
+        wrapper_type,
+        root_cause_type,
+    )
+
+
 # -----------------------------------------------------------------------------
 # Schema init — safe to call repeatedly (CREATE TABLE IF NOT EXISTS)
 # -----------------------------------------------------------------------------
 try:
     init_db()
-except Exception:  # noqa: BLE001
-    # Defer the failure to the first request so the endpoint can return a 503
-    # or SSE error frame instead of crashing the process at import time.
-    print("[history] init_db failed; DB errors will be surfaced per request")
+except HistoryUnavailableError as exc:
+    # History is optional for chat availability. Requests will retry through
+    # the persistence boundary without switching to another database.
+    _log_history_failure("initialize", exc)
 
 # -----------------------------------------------------------------------------
 # App
@@ -141,89 +164,111 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     """Stream a RAG-grounded answer via Server-Sent Events.
 
     Persists the user message before calling Groq, then accumulates the
-    assistant response and persists it on [DONE]. On unexpected failures an
-    error fallback message is stored as the assistant turn.
+    assistant response and persists it on [DONE]. History operations degrade
+    independently: successful reads and writes remain available while failed
+    operations are skipped without blocking the RAG response.
     """
     name = req.student_name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    student_id = None
+    user_message_id = None
+    history = []
+
     try:
         student_id = get_or_create_student(name)
-        user_message_id = save_message(student_id, "user", req.query)
-        history = get_history(student_id, limit=HISTORY_WINDOW)
-    except Exception as exc:  # noqa: BLE001
-        # Dev mode surfaces the real exception so we can diagnose DB issues.
-        # In prod (HF Spaces) we keep the generic message.
-        if _is_production():
-            raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
-        raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
+    except HistoryUnavailableError as exc:
+        _log_history_failure("get_or_create_student", exc)
+
+    if student_id is not None:
+        try:
+            user_message_id = save_message(student_id, "user", req.query)
+        except HistoryUnavailableError as exc:
+            _log_history_failure("save_user_message", exc)
+
+        try:
+            history = get_history(student_id, limit=HISTORY_WINDOW)
+        except HistoryUnavailableError as exc:
+            _log_history_failure("read_recent_history", exc)
 
     def event_generator():
         buffer = ""
         failed = False
-        assistant_message_id = None
-        prod = _is_production()
+        fallback_save_attempted = False
 
-        def _db_error_frame(exc: Exception) -> str:
-            # Dev mode surfaces the real exception; prod keeps the generic
-            # fallback so users don't see internals.
-            msg = DB_ERROR_MESSAGE if prod else f"DB error: {exc!r}"
-            return f"event: error\ndata: {json.dumps({'message': msg})}\n\n"
+        def fallback_message_id_frame():
+            nonlocal fallback_save_attempted
+            if student_id is None or fallback_save_attempted:
+                return None
 
-        yield f"event: user_message_id\ndata: {user_message_id}\n\n"
-
-        try:
-            for token in generate_response(req.query, history=history):
-                if token.startswith("event: error"):
-                    failed = True
-                    try:
-                        assistant_message_id = save_message(
-                            student_id, "assistant", ERROR_FALLBACK
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        yield _db_error_frame(exc)
-                        yield "data: [DONE]\n\n"
-                        return
-                    yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
-                    yield token
-                    continue
-
-                if token.startswith("data: "):
-                    payload = token[6:].removesuffix("\n\n")
-                    if payload == "[DONE]":
-                        if failed:
-                            # The error path already persisted the fallback.
-                            pass
-                        else:
-                            try:
-                                assistant_message_id = save_message(
-                                    student_id, "assistant", buffer
-                                )
-                            except Exception as exc:  # noqa: BLE001
-                                yield _db_error_frame(exc)
-                                yield "data: [DONE]\n\n"
-                                return
-                            yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
-                        yield token
-                        return
-                    buffer += payload
-
-                yield token
-        except Exception as outer_exc:  # noqa: BLE001
+            fallback_save_attempted = True
             try:
                 assistant_message_id = save_message(
                     student_id, "assistant", ERROR_FALLBACK
                 )
-            except Exception as inner_exc:  # noqa: BLE001
-                # If the outer exception is from the DB, pass it; otherwise
-                # the inner one (the DB write failure) is what the user needs.
-                yield _db_error_frame(outer_exc if isinstance(outer_exc, Exception) and "save" not in str(outer_exc) else inner_exc)
-                yield "data: [DONE]\n\n"
-                return
-            yield f"event: assistant_message_id\ndata: {assistant_message_id}\n\n"
+            except HistoryUnavailableError as exc:
+                _log_history_failure("save_assistant_error", exc)
+                return None
+
+            return (
+                "event: assistant_message_id\n"
+                f"data: {assistant_message_id}\n\n"
+            )
+
+        def generation_error_frames():
+            message_id_frame = fallback_message_id_frame()
+            if message_id_frame is not None:
+                yield message_id_frame
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
             yield "data: [DONE]\n\n"
+
+        if user_message_id is not None:
+            yield f"event: user_message_id\ndata: {user_message_id}\n\n"
+
+        try:
+            tokens = iter(generate_response(req.query, history=history))
+        except Exception:  # noqa: BLE001
+            yield from generation_error_frames()
+            return
+
+        while True:
+            try:
+                token = next(tokens)
+            except StopIteration:
+                return
+            except Exception:  # noqa: BLE001
+                yield from generation_error_frames()
+                return
+
+            if token.startswith("event: error"):
+                failed = True
+                message_id_frame = fallback_message_id_frame()
+                if message_id_frame is not None:
+                    yield message_id_frame
+                yield token
+                continue
+
+            if token.startswith("data: "):
+                payload = token[6:].removesuffix("\n\n")
+                if payload == "[DONE]":
+                    if not failed and student_id is not None:
+                        try:
+                            assistant_message_id = save_message(
+                                student_id, "assistant", buffer
+                            )
+                        except HistoryUnavailableError as exc:
+                            _log_history_failure("save_assistant_message", exc)
+                        else:
+                            yield (
+                                "event: assistant_message_id\n"
+                                f"data: {assistant_message_id}\n\n"
+                            )
+                    yield token
+                    return
+                buffer += payload
+
+            yield token
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -241,19 +286,22 @@ async def get_history_endpoint(student_name: str):
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    operation = "lookup_student"
     try:
         student_id = get_student_by_name(name)
         if student_id is None:
             # First time we see this name: create the student and drop the
             # welcome message into the conversation so it survives reloads.
+            operation = "create_student"
             student_id = get_or_create_student(name)
+            operation = "save_welcome_message"
             save_message(student_id, "assistant", WELCOME_MESSAGE.format(name=name))
 
+        operation = "read_history"
         messages = get_history(student_id)
-    except Exception as exc:  # noqa: BLE001
-        if _is_production():
-            raise HTTPException(status_code=503, detail=DB_ERROR_MESSAGE)
-        raise HTTPException(status_code=503, detail=f"DB error: {exc!r}")
+    except HistoryUnavailableError as exc:
+        _log_history_failure(operation, exc)
+        messages = []
 
     return {"messages": messages}
 
