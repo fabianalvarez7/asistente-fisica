@@ -67,7 +67,7 @@
 
 **Qué pasa ahora**: si una operación de Turso o SQLite falla dos veces, el chat la saltea en vez de devolver 503. Cada lectura o escritura degrada de forma independiente: `POST /chat` usa el historial que logra leer, conserva las escrituras que sí completan y sigue generando; solo usa historial vacío si falla esa lectura. Una escritura fallida no se persiste ni recibe id. Si falla alguna operación de `GET /history`, ese endpoint responde `{"messages": []}` aunque operaciones anteriores puedan haber completado. No existe backfill automático.
 
-**Por qué**: `rag/history.py` cachea la conexión a nivel de módulo. `_reconnect_on_failure` descarta un handle fallido y reintenta una vez. En SQLite solo degrada códigos numéricos de disponibilidad; SQL mal formado y tablas faltantes siguen propagándose como defectos. `libsql-experimental 0.0.55` expone una única clase `Error`, sin subtipo o código estable: después del reintento se prioriza mantener el chat disponible, aun sabiendo que el diagnóstico es menos preciso.
+**Por qué**: `rag/history.py` cachea la conexión a nivel de módulo. `_reconnect_on_failure` descarta un handle fallido y reintenta una vez. La catch list cubre tres familias: `sqlite3.OperationalError` con códigos de disponibilidad (SQLITE_BUSY, LOCKED, READONLY, IOERR, FULL, CANTOPEN, PROTOCOL); `OSError` y sus subclases (`ConnectionError`, `TimeoutError`, `socket.gaierror`) — fallos de transporte del cliente libsql contra Turso, que no vienen como `libsql.Error` sino como errores de socket; y `libsql.Error` en general (incluye auth, config y defectos del esquema, todos priorizados como availability para no romper el chat). SQL malformado y tablas faltantes (SQLITE_ERROR) siguen propagándose como defectos. `libsql-experimental 0.0.55` expone una única clase `Error`, sin subtipo o código estable: después del reintento se prioriza mantener el chat disponible, aun sabiendo que el diagnóstico es menos preciso.
 
 **Señal segura**: cada degradación escribe un log nivel `ERROR` con `operation`, `wrapper_type` y `root_cause_type`. Nunca registra texto de la excepción, nombres, preguntas, respuestas, SQL, URLs, tokens ni secretos. Para el prototipo pre-demo, revisar manualmente los logs del Space antes y después del ensayo. Alertas automáticas/Sentry quedan como seguimiento post-demo.
 
@@ -90,6 +90,18 @@
 3. Si querés que el boot check también detecte keys inválidas (no solo vacías), se puede hacer un ping tipo `client.models.list()` al startup. Tradeoff: agrega latencia de boot y depende de que el endpoint `/models` exista. Por ahora el workaround manual es más simple.
 
 **Cómo NO nos morde otra vez**: cuando se renueve la `GROQ_API_KEY` en `console.groq.com`, recordar actualizar **dos** lugares: (1) tu `.env` local, (2) el Space Secret `GROQ_API_KEY` en HF. El test rápido post-deploy es un `curl -N https://<space>.hf.space/chat` con cualquier query — si devuelve `_FALLBACK_ERROR`, la key está mal.
+
+### Fallos de transporte de libsql (`OSError`) escapan al endpoint si no se atrapan explícitamente
+
+**Qué pasa (antes del fix `d8e395f`)**: después de varias horas de uptime con poco tráfico a Turso, el Space dejaba de responder con HTTP 500 en `/history` y `/chat`. En el frontend eso se veía como "No se pudo cargar el historial" en la carga inicial y "Ocurrió un error, intentá de nuevo" al mandar una pregunta — los mismos síntomas que un Turso caído pero **sin** la degradación esperada (historial vacío + chat funcionando). El único workaround era `Restart Space` desde la UI de HF.
+
+**Por qué**: `libsql-experimental 0.0.55` habla con Turso por sockets. Cuando la red se cae (DNS inaccesible, connection refused por Turso pausado, TLS error, read timeout), la excepción que sube es un `OSError` crudo — **no** un `libsql.Error`. La catch list de `_reconnect_on_failure` solo cubría `sqlite3.OperationalError` y `libsql.Error`, así que el `OSError` la atravesaba sin ser reconectado ni envuelto como `HistoryUnavailableError`. En `app/main.py` los endpoints solo capturan `HistoryUnavailableError`, así que cualquier otra excepción burbujea como 500. La raíz: confundir "driver error" (lo que captura libsql) con "transport error" (lo que captura el socket subyacente).
+
+**Cómo NO nos morde otra vez**:
+1. `_HISTORY_DRIVER_ERRORS` incluye `OSError` y `_is_history_availability_error` lo trata como availability. Cubierto por commit `d8e395f`.
+2. Tests de regresión en `tests/test_chat_sse_message_ids.py::HistoryPersistenceBoundaryTests`: `test_repeated_oserror_is_translated_with_cause`, `test_oserror_on_first_attempt_recovers_on_retry`, `test_oserror_subclasses_are_also_translated` (cubre `ConnectionError`, `TimeoutError` y `OSError` base).
+3. Si `libsql-experimental` rompe el contrato y empieza a levantar una jerarquía de excepciones que **no** es subclase de `OSError` (algo así como `class libsql.ConnectionLost(BrokenPipeError)` con MRO nuevo), agregar la nueva clase a `_LIBSQL_ERRORS` Y al chequeo de `_is_history_availability_error` — nunca dejarla burbujear al endpoint.
+4. El test rápido post-deploy para verificar la degradación esperada (no 500): `curl -i https://<space>.hf.space/history?student_name=foo` debe devolver **200** con `{"messages": []}` aunque Turso esté caído. Si devuelve 500, el catch list volvió a quedar corto.
 
 ## Splitter (RecursiveCharacterTextSplitter)
 
