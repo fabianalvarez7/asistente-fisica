@@ -161,6 +161,28 @@ body {
 }
 
 /* -------------------------------------------------------------------------
+ * History-degraded banner
+ * Shown when the persistence layer is unavailable (Turso outage, network
+ * blip) so the student understands that the conversation will not
+ * survive a reload but they can keep asking. Soft amber tone — not the
+ * red of a hard error, since the chat itself keeps working.
+ * ------------------------------------------------------------------------- */
+
+.history-banner {
+  padding: var(--space-md) var(--space-xl);
+  background-color: #fff4d6;
+  color: #6b4f00;
+  border-bottom: 1px solid #f0d27a;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+  font-weight: var(--font-weight-medium);
+}
+
+.history-banner[hidden] {
+  display: none;
+}
+
+/* -------------------------------------------------------------------------
  * Messages
  * User bubbles: green pill with dark text, right-aligned.
  * Assistant messages: no bubble, left-aligned plain text (per Justo's frames).

@@ -83,6 +83,14 @@ except ValueError:
 ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un momento."
 
+#: SSE ``event:`` name announcing the persistence layer's health for the
+#: current request. ``data:`` payload is ``"degraded"`` when at least one
+#: history operation failed and the chat is responding without persistence.
+#: The frontend uses this to show a non-blocking banner so students know
+#: the conversation will not survive a reload but they can keep asking.
+HISTORY_STATUS_EVENT = "history_status"
+HISTORY_STATUS_DEGRADED = "degraded"
+
 # Welcome message persisted as the first assistant turn when a student types a
 # new display name. Only fires on first-time identification — students with
 # existing history keep their real conversation, not a greeting on every reload.
@@ -167,6 +175,12 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     assistant response and persists it on [DONE]. History operations degrade
     independently: successful reads and writes remain available while failed
     operations are skipped without blocking the RAG response.
+
+    If any history operation fails for this request, the SSE stream starts
+    with ``event: history_status\ndata: degraded\n\n`` so the frontend can
+    surface a banner explaining that the conversation will not survive a
+    reload but the student can keep asking. The chat itself continues
+    normally — only persistence is unavailable.
     """
     name = req.student_name.strip()
     if not name:
@@ -175,24 +189,29 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     student_id = None
     user_message_id = None
     history = []
+    history_degraded = False
 
     try:
         student_id = get_or_create_student(name)
     except HistoryUnavailableError as exc:
         _log_history_failure("get_or_create_student", exc)
+        history_degraded = True
 
     if student_id is not None:
         try:
             user_message_id = save_message(student_id, "user", req.query)
         except HistoryUnavailableError as exc:
             _log_history_failure("save_user_message", exc)
+            history_degraded = True
 
         try:
             history = get_history(student_id, limit=HISTORY_WINDOW)
         except HistoryUnavailableError as exc:
             _log_history_failure("read_recent_history", exc)
+            history_degraded = True
 
     def event_generator():
+        nonlocal history_degraded
         buffer = ""
         failed = False
         fallback_save_attempted = False
@@ -222,6 +241,16 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 yield message_id_frame
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
             yield "data: [DONE]\n\n"
+
+        # Announce degraded history BEFORE the user_message_id so the banner
+        # is visible from the very first byte of the response. The frontend
+        # is idempotent on this event — re-emitting is a no-op if the
+        # banner is already up.
+        if history_degraded:
+            yield (
+                f"event: {HISTORY_STATUS_EVENT}\n"
+                f"data: {HISTORY_STATUS_DEGRADED}\n\n"
+            )
 
         if user_message_id is not None:
             yield f"event: user_message_id\ndata: {user_message_id}\n\n"
@@ -259,6 +288,15 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                             )
                         except HistoryUnavailableError as exc:
                             _log_history_failure("save_assistant_message", exc)
+                            # Mid-stream degradation: history was OK at
+                            # request entry but the assistant write failed.
+                            # Re-announce so the banner shows up if it
+                            # wasn't visible already.
+                            yield (
+                                f"event: {HISTORY_STATUS_EVENT}\n"
+                                f"data: {HISTORY_STATUS_DEGRADED}\n\n"
+                            )
+                            history_degraded = True
                         else:
                             yield (
                                 "event: assistant_message_id\n"
@@ -287,6 +325,7 @@ async def get_history_endpoint(student_name: str):
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
     operation = "lookup_student"
+    history_degraded = False
     try:
         student_id = get_student_by_name(name)
         if student_id is None:
@@ -295,15 +334,22 @@ async def get_history_endpoint(student_name: str):
             operation = "create_student"
             student_id = get_or_create_student(name)
             operation = "save_welcome_message"
-            save_message(student_id, "assistant", WELCOME_MESSAGE.format(name=name))
+            try:
+                save_message(
+                    student_id, "assistant", WELCOME_MESSAGE.format(name=name)
+                )
+            except HistoryUnavailableError as exc:
+                _log_history_failure("save_welcome_message", exc)
+                history_degraded = True
 
         operation = "read_history"
         messages = get_history(student_id)
     except HistoryUnavailableError as exc:
         _log_history_failure(operation, exc)
         messages = []
+        history_degraded = True
 
-    return {"messages": messages}
+    return {"messages": messages, "degraded": history_degraded}
 
 
 @app.delete("/messages/{message_id}")

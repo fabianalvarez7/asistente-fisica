@@ -25,7 +25,30 @@ const nameSubmit = document.getElementById('name-submit');
 const MAX_CHARS = 500;
 const STORAGE_KEY = 'student_name';
 const FALLBACK_ERROR = 'Ocurrió un error, intentá de nuevo';
+// Shown as a non-blocking banner above the messages list when the
+// persistence layer is degraded. The SSE stream emits
+// ``event: history_status\ndata: degraded`` and ``/history`` returns
+// ``degraded: true`` to trigger it. The chat itself keeps responding
+// normally; the banner only signals that the conversation will not
+// survive a reload.
+const HISTORY_BANNER_ID = 'history-banner';
 let studentName = localStorage.getItem(STORAGE_KEY);
+
+/**
+ * Show or hide the history-degraded banner. Idempotent: calling it
+ * multiple times with the same ``visible`` value has no extra effect.
+ *
+ * @param {boolean} visible true to reveal the banner, false to hide it.
+ */
+function setHistoryBannerVisible(visible) {
+  const banner = document.getElementById(HISTORY_BANNER_ID);
+  if (!banner) return;
+  if (visible) {
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
+}
 
 /**
  * HTML-escape user-provided text before injecting it into innerHTML. The
@@ -177,6 +200,14 @@ function processFrame(frame, assistant, userLi) {
     return;
   }
 
+  if (eventName === 'history_status' && dataValue === 'degraded') {
+    // The persistence layer failed at least once for this request. Show
+    // the banner so the student knows the conversation won't survive a
+    // reload — but the chat itself keeps responding.
+    setHistoryBannerVisible(true);
+    return;
+  }
+
   if (eventName === 'user_message_id' && userLi) {
     const deleteBtn = userLi.querySelector('.delete-btn');
     if (deleteBtn) {
@@ -297,6 +328,7 @@ async function loadHistory() {
       throw new Error(`HTTP ${resp.status}`);
     }
     const data = await resp.json();
+    setHistoryBannerVisible(Boolean(data.degraded));
     data.messages.forEach((msg, i) => renderMessage(msg, i));
   } catch (err) {
     showHint('No se pudo cargar el historial');

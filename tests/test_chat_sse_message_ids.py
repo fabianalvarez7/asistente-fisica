@@ -181,6 +181,12 @@ class ChatSseMessageIdTests(unittest.TestCase):
         welcome_error=None,
         read_error=None,
     ):
+        degraded = (
+            lookup_error is not None
+            or create_error is not None
+            or welcome_error is not None
+            or read_error is not None
+        )
         with (
             patch(
                 "app.main.get_student_by_name",
@@ -209,7 +215,10 @@ class ChatSseMessageIdTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"messages": []})
+        self.assertEqual(
+            response.json(),
+            {"messages": [], "degraded": degraded},
+        )
 
     def test_history_endpoint_degrades_when_lookup_fails(self):
         self._assert_history_degrades(lookup_error=HistoryUnavailableError())
@@ -236,6 +245,130 @@ class ChatSseMessageIdTests(unittest.TestCase):
                     "/chat",
                     json={"query": "test", "student_name": "Ana"},
                 )
+
+    def test_history_endpoint_returns_degraded_false_on_normal_path(self):
+        with (
+            patch("app.main.get_student_by_name", return_value=1),
+            patch("app.main.get_history", return_value=[]),
+        ):
+            response = self.client.get(
+                "/history",
+                params={"student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"messages": [], "degraded": False},
+        )
+
+    def test_history_status_event_emitted_when_lookup_fails(self):
+        generator = MagicMock(side_effect=_fake_generator)
+        with (
+            patch("app.main.generate_response", generator),
+            patch(
+                "app.main.get_or_create_student",
+                side_effect=HistoryUnavailableError(),
+            ),
+            patch("app.main.save_message") as mock_save,
+        ):
+            response = self.client.post(
+                "/chat",
+                json={"query": "test", "student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        # The event is the very first frame so the frontend can render
+        # the banner before any assistant text starts streaming.
+        self.assertTrue(
+            body.startswith("event: history_status\ndata: degraded\n\n"),
+            f"history_status event was not first; got: {body[:200]!r}",
+        )
+        mock_save.assert_not_called()
+
+    def test_history_status_event_emitted_when_user_message_save_fails(self):
+        generator = MagicMock(side_effect=_fake_generator)
+        with (
+            patch("app.main.generate_response", generator),
+            patch("app.main.get_or_create_student", return_value=1),
+            patch(
+                "app.main.save_message",
+                side_effect=HistoryUnavailableError(),
+            ),
+            patch("app.main.get_history", return_value=[]),
+        ):
+            response = self.client.post(
+                "/chat",
+                json={"query": "test", "student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn("event: history_status\ndata: degraded\n\n", body)
+        self.assertNotIn("event: user_message_id", body)
+
+    def test_history_status_event_emitted_when_history_read_fails(self):
+        generator = MagicMock(side_effect=_fake_generator)
+        with (
+            patch("app.main.generate_response", generator),
+            patch("app.main.get_or_create_student", return_value=1),
+            patch("app.main.get_history", side_effect=HistoryUnavailableError),
+            patch("app.main.save_message", side_effect=[101, 202]),
+        ):
+            response = self.client.post(
+                "/chat",
+                json={"query": "test", "student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn("event: history_status\ndata: degraded\n\n", body)
+
+    def test_history_status_event_omitted_when_history_works(self):
+        generator = MagicMock(side_effect=_fake_generator)
+        with (
+            patch("app.main.generate_response", generator),
+            patch("app.main.get_or_create_student", return_value=1),
+            patch("app.main.get_history", return_value=[]),
+            patch("app.main.save_message", side_effect=[101, 202]),
+        ):
+            response = self.client.post(
+                "/chat",
+                json={"query": "test", "student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertNotIn("event: history_status", body)
+
+    def test_history_status_event_emitted_when_assistant_save_fails_mid_stream(self):
+        # The first history calls succeed (so no event at the start), but
+        # the assistant write at [DONE] fails — the banner must still
+        # appear so the student knows the conversation won't persist.
+        generator = MagicMock(side_effect=_fake_generator)
+        with (
+            patch("app.main.generate_response", generator),
+            patch("app.main.get_or_create_student", return_value=1),
+            patch("app.main.get_history", return_value=[]),
+            patch(
+                "app.main.save_message",
+                side_effect=[101, HistoryUnavailableError()],
+            ),
+        ):
+            response = self.client.post(
+                "/chat",
+                json={"query": "test", "student_name": "Ana"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+        self.assertIn("event: history_status\ndata: degraded\n\n", body)
+        # The event is emitted right before [DONE] so the banner shows up
+        # even if history was fine at request entry.
+        degraded_index = body.index("event: history_status\ndata: degraded\n\n")
+        done_index = body.index("data: [DONE]\n\n")
+        self.assertLess(degraded_index, done_index)
 
     def test_history_endpoint_does_not_swallow_non_history_exception(self):
         with patch(

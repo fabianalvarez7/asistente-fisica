@@ -28,6 +28,16 @@
 
     <!-- Chat column: messages + identification / input areas + footer. -->
     <main class="chat-container">
+      <!-- Visible only when the persistence layer is degraded (Turso
+           outage, network blip). Tells students the conversation will not
+           survive a reload but they can keep asking. The
+           ``hidden`` attribute is removed from JS via the
+           ``history_status`` SSE event or the ``degraded`` field of the
+           ``/history`` response. -->
+      <div id="history-banner" class="history-banner" role="status" aria-live="polite" hidden>
+        El historial no está disponible por ahora. Podés seguir preguntando.
+      </div>
+
       <ul id="messages" class="messages" aria-live="polite"></ul>
 
       <div id="name-area" class="name-area">
