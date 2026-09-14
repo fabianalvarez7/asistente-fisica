@@ -1,0 +1,46 @@
+name: Keep HF Space alive
+
+on:
+  # HF Spaces free tier sleeps the container after 48h of inactivity.
+  # 12h gives 4 pings per day, more than enough margin for the demo
+  # week (Wed–Fri). UTC times: 00:00 and 12:00 = 21:00 and 09:00 ART.
+  schedule:
+    - cron: '0 */12 * * *'
+  # Manual trigger so we can verify the workflow without waiting for
+  # the cron schedule.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the Space and touch Turso
+        run: |
+          set -euo pipefail
+
+          SPACE_URL="https://fabianalvarez7-asistente-fisica-unr.hf.space"
+
+          # GET /history with a system student name. First call creates
+          # the student (with welcome message); subsequent calls just
+          # return it. Either way, this:
+          #   1. Wakes the HF Space container if it was asleep.
+          #   2. Exercises the persistence layer so the Turso connection
+          #      stays warm and the free-tier DB doesn't get evicted.
+          # If /history returns 200, both the Space and Turso are
+          # reachable. If it returns 500, the Space is broken (and the
+          # demo will need a manual restart from the HF UI).
+          response=$(curl -sS -o /tmp/keepalive.json \
+            -w "%{http_code}" \
+            --max-time 30 \
+            "${SPACE_URL}/history?student_name=_keepalive")
+
+          if [ "$response" != "200" ]; then
+            echo "::error::Space returned HTTP $response, expected 200"
+            exit 1
+          fi
+
+          echo "Space returned 200"
+          echo "--- response body (first 200 bytes) ---"
+          head -c 200 /tmp/keepalive.json
+          echo ""
