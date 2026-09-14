@@ -515,6 +515,75 @@ class HistoryPersistenceBoundaryTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_repeated_oserror_is_translated_with_cause(self):
+        # libsql talks to Turso over sockets; transport failures (DNS,
+        # connection refused, read timeout, TLS error) surface as raw
+        # ``OSError``, NOT as ``libsql.Error``. The previous catch list
+        # missed these and the endpoint returned HTTP 500 instead of
+        # degrading. Asserting this translation is the regression guard.
+        attempts = []
+
+        @history_module._reconnect_on_failure
+        def unavailable_operation():
+            error = OSError("Connection refused")
+            attempts.append(error)
+            raise error
+
+        with patch.object(history_module, "_reset_connection") as reset:
+            with self.assertRaises(HistoryUnavailableError) as raised:
+                unavailable_operation()
+
+        self.assertEqual(len(attempts), 2)
+        self.assertIs(raised.exception.__cause__, attempts[-1])
+        reset.assert_called_once_with()
+
+    def test_oserror_on_first_attempt_recovers_on_retry(self):
+        # Transient network blip on the first attempt should reset the
+        # connection and succeed transparently on the retry — no exception
+        # bubbles out and the caller never sees the outage.
+        attempts = []
+
+        @history_module._reconnect_on_failure
+        def flaky_operation():
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise OSError("network blip")
+            return "ok"
+
+        with patch.object(history_module, "_reset_connection") as reset:
+            result = flaky_operation()
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(len(attempts), 2)
+        reset.assert_called_once_with()
+
+    def test_oserror_subclasses_are_also_translated(self):
+        # ``ConnectionError`` and ``TimeoutError`` are subclasses of
+        # ``OSError`` in Python 3.3+. Verify they go through the same
+        # translation path so the regression guard covers the whole
+        # transport-layer hierarchy, not just bare ``OSError``.
+        for exc_class, message in (
+            (ConnectionError, "remote end closed connection"),
+            (TimeoutError, "read timed out"),
+            (OSError, "Name or service not known"),
+        ):
+            with self.subTest(exception=exc_class.__name__):
+                attempts = []
+
+                @history_module._reconnect_on_failure
+                def unavailable_operation():
+                    error = exc_class(message)
+                    attempts.append(error)
+                    raise error
+
+                with patch.object(history_module, "_reset_connection") as reset:
+                    with self.assertRaises(HistoryUnavailableError) as raised:
+                        unavailable_operation()
+
+                self.assertEqual(len(attempts), 2)
+                self.assertIs(raised.exception.__cause__, attempts[-1])
+                reset.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

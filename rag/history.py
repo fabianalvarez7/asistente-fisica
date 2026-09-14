@@ -57,7 +57,7 @@ try:
 except ImportError:  # pragma: no cover - dev environment without libsql
     _LIBSQL_ERRORS = ()
 
-_HISTORY_DRIVER_ERRORS = (sqlite3.OperationalError, *_LIBSQL_ERRORS)
+_HISTORY_DRIVER_ERRORS = (sqlite3.OperationalError, OSError, *_LIBSQL_ERRORS)
 
 # SQLite reports both availability failures and SQL/schema defects as
 # OperationalError. Classify by SQLite's numeric result code so malformed SQL
@@ -84,6 +84,15 @@ def _is_history_availability_error(exc: Exception) -> bool:
         # availability after retry even though this can mask a driver-reported
         # schema/auth/config defect. Never parse Error.args or its text: they
         # may contain SQL, URLs, credentials, or other sensitive context.
+        return True
+
+    # libsql-experimental talks to Turso over sockets, so DNS failures,
+    # connection refusals, TLS errors and read timeouts surface as raw
+    # ``OSError`` (and its subclasses ``ConnectionError``, ``TimeoutError``,
+    # ``socket.gaierror``) — NOT as ``libsql.Error``. The previous catch list
+    # missed these and the endpoint returned HTTP 500 instead of degrading.
+    # Treat any ``OSError`` raised from the persistence path as availability.
+    if isinstance(exc, OSError):
         return True
 
     if not isinstance(exc, sqlite3.OperationalError):
@@ -165,11 +174,19 @@ def _reconnect_on_failure(func):
       it was the bug behind the 503 on ``/history`` after a Space
       sleep/wake cycle. See ``docs/gotchas.md`` for the original failure
       mode.
+    * ``OSError`` for transport-layer failures from the libsql client.
+      DNS failures, connection refusals, TLS errors and read timeouts
+      surface as raw ``OSError`` (or its subclasses ``ConnectionError``,
+      ``TimeoutError``, ``socket.gaierror``) — NOT as ``libsql.Error``.
+      Missing these from the catch list was the bug behind the 500 on
+      ``/history`` and ``/chat`` after a few hours of uptime with no
+      Turso traffic. The endpoint was forced to 500 because the
+      exception bypassed this decorator entirely.
 
     If ``libsql_experimental`` ever adds more exception types (e.g. a
     distinct ``ConnectionError`` subclass), add them to ``_LIBSQL_ERRORS``
     above — never silently let a connection-level error bubble up to the
-    endpoint and become a 503.
+    endpoint and become a 500.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
