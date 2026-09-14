@@ -57,7 +57,29 @@ try:
 except ImportError:  # pragma: no cover - dev environment without libsql
     _LIBSQL_ERRORS = ()
 
-_HISTORY_DRIVER_ERRORS = (sqlite3.OperationalError, OSError, *_LIBSQL_ERRORS)
+# Programming defects that should NEVER be silently degraded. They indicate
+# real bugs (bad SQL, wrong argument type, missing attribute) that need to be
+# fixed in code, not papered over by the chat falling back to history-less
+# mode. Without this whitelist, ``_reconnect_on_failure`` would mask real
+# defects as transient outages.
+#
+# ``sqlite3.ProgrammingError`` (bad SQL) and ``sqlite3.IntegrityError``
+# (constraint violations) are explicitly excluded from degradation — a
+# schema/code drift must surface so we fix it. ``sqlite3.OperationalError``
+# is handled separately: its numeric result code distinguishes availability
+# failures (BUSY, IOERR, CANTOPEN, ...) from SQL/schema defects (SQLITE_ERROR,
+# SQLITE_SCHEMA, ...). The two are not interchangeable.
+_PROGRAMMING_DEFECTS = (
+    TypeError,
+    ValueError,
+    AttributeError,
+    NameError,
+    KeyError,
+    IndexError,
+    AssertionError,
+    sqlite3.ProgrammingError,
+    sqlite3.IntegrityError,
+)
 
 # SQLite reports both availability failures and SQL/schema defects as
 # OperationalError. Classify by SQLite's numeric result code so malformed SQL
@@ -77,7 +99,13 @@ _SQLITE_AVAILABILITY_CODES = frozenset(
 
 
 def _is_history_availability_error(exc: Exception) -> bool:
-    """Return whether a driver error represents persistence unavailability."""
+    """Return whether a driver error represents persistence unavailability.
+
+    Used only to classify ``sqlite3.OperationalError`` by result code inside
+    ``_is_programming_defect``. The libsql and ``OSError`` branches remain
+    here as documentation of what counts as availability across the stack,
+    even though the catch-all decorator no longer relies on them.
+    """
     if _LIBSQL_ERRORS and isinstance(exc, _LIBSQL_ERRORS):
         # libsql-experimental 0.0.55 exposes only one Error class, with no
         # stable subtype or machine-readable code. We deliberately prefer chat
@@ -89,9 +117,7 @@ def _is_history_availability_error(exc: Exception) -> bool:
     # libsql-experimental talks to Turso over sockets, so DNS failures,
     # connection refusals, TLS errors and read timeouts surface as raw
     # ``OSError`` (and its subclasses ``ConnectionError``, ``TimeoutError``,
-    # ``socket.gaierror``) — NOT as ``libsql.Error``. The previous catch list
-    # missed these and the endpoint returned HTTP 500 instead of degrading.
-    # Treat any ``OSError`` raised from the persistence path as availability.
+    # ``socket.gaierror``) — NOT as ``libsql.Error``.
     if isinstance(exc, OSError):
         return True
 
@@ -103,6 +129,31 @@ def _is_history_availability_error(exc: Exception) -> bool:
         error_code is not None
         and error_code & 0xFF in _SQLITE_AVAILABILITY_CODES
     )
+
+
+def _is_programming_defect(exc: Exception) -> bool:
+    """Return whether an exception indicates a code defect that must propagate.
+
+    Anything that is NOT a programming defect is treated as a transient
+    availability failure: ``_reconnect_on_failure`` will reset the cached
+    connection, retry once, and wrap as ``HistoryUnavailableError`` if the
+    retry also fails.
+
+    The whitelist is conservative on purpose. Adding more types here means
+    more bugs surface as 500 instead of degraded chat; removing types here
+    means more defects get silently masked. The trade-off we want is
+    ``chat-stays-up-but-history-may-be-wrong`` for outages, and
+    ``500-so-we-notice`` for code bugs.
+    """
+    if isinstance(exc, _PROGRAMMING_DEFECTS):
+        return True
+    # SQLite OperationalError is the one case where the same exception class
+    # can mean either "DB unreachable" (BUSY, IOERR, CANTOPEN, ...) or
+    # "bad SQL / schema drift" (SQLITE_ERROR, SQLITE_SCHEMA, ...). The
+    # numeric result code distinguishes them — only the latter is a defect.
+    if isinstance(exc, sqlite3.OperationalError):
+        return not _is_history_availability_error(exc)
+    return False
 
 
 def _get_connection():
@@ -155,51 +206,51 @@ def _reset_connection() -> None:
 
 
 def _reconnect_on_failure(func):
-    """Decorator: retry the wrapped function once after rebuilding the
-    connection.
+    """Decorator: classify the wrapped function's exceptions and degrade
+    gracefully when they reflect persistence unavailability.
 
-    Catches the connection-level errors that signal a stale handle — Turso
-    TTL expiry, network blip, container sleep/wake, etc. — drops the cached
-    connection, and re-invokes the function so ``_get_connection`` builds a
-    fresh one. Other exceptions (``ProgrammingError`` on bad SQL,
-    ``IntegrityError`` on constraint violations) propagate unchanged
-    because they are not connection issues.
+    Behavior:
 
-    The catch list is:
+    * Programming defects (bad SQL, wrong argument types, missing
+      attributes, invariant violations, constraint failures) propagate
+      as-is so they appear as 500 in the logs and get fixed in code.
+      See ``_PROGRAMMING_DEFECTS`` and ``_is_programming_defect`` for
+      the whitelist.
+    * Anything else — ``libsql.Error``, ``OSError`` and its socket
+      subclasses, ``sqlite3.OperationalError`` with BUSY/IOERR/CANTOPEN
+      codes, and any future exception type we have not seen — is treated
+      as availability. The cached connection is discarded, the wrapped
+      function is called once more (which rebuilds a fresh connection
+      via ``_get_connection``), and if that retry also fails for any
+      non-defect reason the error is wrapped as ``HistoryUnavailableError``
+      so the chat endpoints can keep the UX alive without history.
 
-    * ``sqlite3.OperationalError`` for the local SQLite dev path.
-    * ``libsql_experimental.Error`` for the Turso production path. This
-      class is NOT in the ``sqlite3`` hierarchy — it inherits from
-      ``Exception`` directly — so it has to be added explicitly. Omitting
-      it was the bug behind the 503 on ``/history`` after a Space
-      sleep/wake cycle. See ``docs/gotchas.md`` for the original failure
-      mode.
-    * ``OSError`` for transport-layer failures from the libsql client.
-      DNS failures, connection refusals, TLS errors and read timeouts
-      surface as raw ``OSError`` (or its subclasses ``ConnectionError``,
-      ``TimeoutError``, ``socket.gaierror``) — NOT as ``libsql.Error``.
-      Missing these from the catch list was the bug behind the 500 on
-      ``/history`` and ``/chat`` after a few hours of uptime with no
-      Turso traffic. The endpoint was forced to 500 because the
-      exception bypassed this decorator entirely.
-
-    If ``libsql_experimental`` ever adds more exception types (e.g. a
-    distinct ``ConnectionError`` subclass), add them to ``_LIBSQL_ERRORS``
-    above — never silently let a connection-level error bubble up to the
-    endpoint and become a 500.
+    This is a catch-all by design. ``libsql-experimental`` is in 0.0.55
+    and the next layer in the stack may surface a new exception class at
+    any time. Earlier versions of this decorator caught only a narrow set
+    (``sqlite3.OperationalError``, then ``libsql.Error``, then
+    ``OSError``), and each gap was discovered only after a Turso outage
+    took the chat down in production. See ``docs/gotchas.md`` for the
+    timeline. The catch-all eliminates the whack-a-mole: any new
+    exception type that is not a recognized programming defect now
+    degrades gracefully out of the box.
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except _HISTORY_DRIVER_ERRORS as exc:
-            if not _is_history_availability_error(exc):
+        except Exception as exc:
+            # ``BaseException`` subclasses (KeyboardInterrupt, SystemExit,
+            # asyncio.CancelledError, GeneratorExit) are NOT caught by
+            # ``except Exception`` and propagate unchanged — that is the
+            # intended behavior.
+            if _is_programming_defect(exc):
                 raise
             _reset_connection()
             try:
                 return func(*args, **kwargs)
-            except _HISTORY_DRIVER_ERRORS as retry_exc:
-                if not _is_history_availability_error(retry_exc):
+            except Exception as retry_exc:
+                if _is_programming_defect(retry_exc):
                     raise
                 raise HistoryUnavailableError(
                     "History persistence remained unavailable after reconnect"

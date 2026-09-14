@@ -584,6 +584,88 @@ class HistoryPersistenceBoundaryTests(unittest.TestCase):
                 self.assertIs(raised.exception.__cause__, attempts[-1])
                 reset.assert_called_once_with()
 
+    def test_unknown_exception_type_is_treated_as_availability(self):
+        # Catch-all defense in depth: an exception type we have never
+        # seen (e.g. a future ``libsql.ConnectionLost`` that inherits
+        # from something exotic) MUST be treated as availability so the
+        # chat degrades instead of returning 500. ``RuntimeError`` is
+        # not in the programming-defect whitelist because too many
+        # genuine transport errors come up as ``RuntimeError``.
+        attempts = []
+
+        class HypotheticalFutureLibsqlError(Exception):
+            """Pretend this is a new class added in libsql 0.0.99."""
+
+        @history_module._reconnect_on_failure
+        def unavailable_operation():
+            error = HypotheticalFutureLibsqlError("new failure mode")
+            attempts.append(error)
+            raise error
+
+        with patch.object(history_module, "_reset_connection") as reset:
+            with self.assertRaises(HistoryUnavailableError) as raised:
+                unavailable_operation()
+
+        self.assertEqual(len(attempts), 2)
+        self.assertIs(raised.exception.__cause__, attempts[-1])
+        reset.assert_called_once_with()
+
+    def test_programming_defects_propagate_unchanged(self):
+        # The whitelist in ``_PROGRAMMING_DEFECTS`` is the floor of bugs
+        # we refuse to mask. Every entry must propagate as-is — neither
+        # the decorator nor the connection-reset may swallow them.
+        for exc in (
+            TypeError("wrong argument type"),
+            ValueError("bad value"),
+            AttributeError("no such attribute"),
+            NameError("name not defined"),
+            KeyError("missing key"),
+            IndexError("list index out of range"),
+            AssertionError("invariant broken"),
+            sqlite3.ProgrammingError("bad SQL"),
+            sqlite3.IntegrityError("constraint failed"),
+        ):
+            with self.subTest(exception=type(exc).__name__):
+                attempts = 0
+
+                @history_module._reconnect_on_failure
+                def broken_operation():
+                    nonlocal attempts
+                    attempts += 1
+                    raise exc
+
+                with patch.object(history_module, "_reset_connection") as reset:
+                    with self.assertRaises(type(exc)) as raised:
+                        broken_operation()
+
+                # Programming defects surface immediately — no retry,
+                # no reset, no wrap.
+                self.assertEqual(attempts, 1)
+                self.assertIs(raised.exception, exc)
+                reset.assert_not_called()
+
+    def test_programming_defect_on_retry_propagates(self):
+        # If the first attempt raises an availability error (Turso
+        # outage) but the retry raises a programming defect (e.g. a
+        # transient schema bug exposed by the rebuild), the defect must
+        # propagate rather than get masked by the wrapping logic.
+        attempts = []
+
+        @history_module._reconnect_on_failure
+        def unavailable_then_broken():
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise OSError("transient network blip")
+            raise TypeError("schema check found a bug")
+
+        with patch.object(history_module, "_reset_connection") as reset:
+            with self.assertRaises(TypeError) as raised:
+                unavailable_then_broken()
+
+        self.assertEqual(len(attempts), 2)
+        self.assertIn("schema check found a bug", str(raised.exception))
+        reset.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()
