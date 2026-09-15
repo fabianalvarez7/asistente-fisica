@@ -122,28 +122,98 @@ body {
 }
 
 .topic-group-title {
-  margin: 0 0 var(--space-sm);
+  margin: 0;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   letter-spacing: 0.02em;
 }
 
-.topic-group .topics-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.topic-group-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-sm) 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.topic-group-header:hover {
+  color: var(--color-brand-primary-hover);
+}
+
+.topic-prompts {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  padding: 0 0 var(--space-md) var(--space-md);
 }
 
-.topic-group .topics-list li {
-  padding: var(--space-xs) 0;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-regular);
+.topic-prompts[hidden] {
+  display: none;
+}
+
+.topic-prompt {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-base);
   line-height: var(--line-height-base);
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.topic-prompt:hover {
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.topic-prompt--draft {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.draft-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-style: normal;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+.topic-prompts > p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 768px) {
+  .topic-group-header,
+  .topic-prompt {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* -------------------------------------------------------------------------

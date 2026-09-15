@@ -337,6 +337,19 @@ async function loadHistory() {
 
 const topicsContainer = document.getElementById('topics-container');
 
+const DRAFT_PREFIX = /^\[BORRADOR[^\]]*\]\s*/;
+
+/**
+ * Strip the professor-review draft marker from a prompt string.
+ *
+ * Pure function: no side effects, only string manipulation. Used both when
+ * rendering the prompt text (to decide the draft modifier class) and when
+ * filling the chat input (so the student never sends the marker).
+ */
+function stripDraftPrefix(text) {
+  return text.replace(DRAFT_PREFIX, '').trim();
+}
+
 async function loadTopics() {
   if (!topicsContainer) return;
 
@@ -348,25 +361,110 @@ async function loadTopics() {
     const data = await resp.json();
 
     const fragment = document.createDocumentFragment();
-    for (const unidad of data.unidades || []) {
+    (data.unidades || []).forEach((unidad) => {
       const group = document.createElement('div');
       group.className = 'topic-group';
 
-      const title = document.createElement('h3');
-      title.className = 'topic-group-title';
-      title.textContent = `UNIDAD ${unidad.numero} — ${unidad.titulo}`;
+      const heading = document.createElement('h3');
+      heading.className = 'topic-group-title';
 
-      group.appendChild(title);
+      const headerBtn = document.createElement('button');
+      headerBtn.type = 'button';
+      headerBtn.className = 'topic-group-header';
+      headerBtn.setAttribute('aria-expanded', 'false');
+      headerBtn.setAttribute('aria-controls', `prompts-${unidad.numero}`);
+      headerBtn.textContent = `UNIDAD ${unidad.numero} — ${unidad.titulo}`;
+
+      heading.appendChild(headerBtn);
+      group.appendChild(heading);
+
+      const body = document.createElement('div');
+      body.id = `prompts-${unidad.numero}`;
+      body.className = 'topic-prompts';
+      body.setAttribute('role', 'region');
+      body.setAttribute('aria-live', 'polite');
+      body.hidden = true;
+
+      const preguntas = unidad.preguntas || [];
+      if (preguntas.length === 0) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.textContent = 'Sin preguntas por ahora';
+        body.appendChild(emptyMsg);
+      } else {
+        preguntas.forEach((raw) => {
+          const promptBtn = document.createElement('button');
+          promptBtn.type = 'button';
+          promptBtn.className = 'topic-prompt';
+          promptBtn.dataset.question = raw;
+
+          if (raw.startsWith('[BORRADOR')) {
+            promptBtn.classList.add('topic-prompt--draft');
+            const badge = document.createElement('span');
+            badge.className = 'draft-badge';
+            badge.textContent = 'Borrador';
+            promptBtn.appendChild(badge);
+          }
+
+          promptBtn.appendChild(document.createTextNode(stripDraftPrefix(raw)));
+          body.appendChild(promptBtn);
+        });
+      }
+
+      group.appendChild(body);
       fragment.appendChild(group);
-    }
+    });
 
     topicsContainer.innerHTML = '';
     topicsContainer.appendChild(fragment);
+
+    // Desktop default: first unit open; mobile stays fully collapsed.
+    if (window.matchMedia('(min-width: 769px)').matches) {
+      const firstHeader = topicsContainer.querySelector('.topic-group-header');
+      const firstBody = topicsContainer.querySelector('.topic-prompts');
+      if (firstHeader && firstBody) {
+        firstHeader.setAttribute('aria-expanded', 'true');
+        firstBody.hidden = false;
+      }
+    }
   } catch (err) {
     // El sidebar es decorativo: si falla, ocultamos el contenedor sin
     // interrumpir la experiencia de chat.
     topicsContainer.style.display = 'none';
   }
+}
+
+if (topicsContainer) {
+  topicsContainer.addEventListener('click', (event) => {
+    const headerBtn = event.target.closest('.topic-group-header');
+    if (headerBtn) {
+      const bodyId = headerBtn.getAttribute('aria-controls');
+      const targetBody = document.getElementById(bodyId);
+      if (!targetBody) return;
+
+      // Close any currently open unit so only one is expanded at a time.
+      const openHeader = topicsContainer.querySelector('.topic-group-header[aria-expanded="true"]');
+      if (openHeader && openHeader !== headerBtn) {
+        const openBody = document.getElementById(openHeader.getAttribute('aria-controls'));
+        if (openBody) {
+          openBody.hidden = true;
+        }
+        openHeader.setAttribute('aria-expanded', 'false');
+      }
+
+      const willOpen = targetBody.hidden;
+      targetBody.hidden = !willOpen;
+      headerBtn.setAttribute('aria-expanded', String(willOpen));
+      return;
+    }
+
+    const promptBtn = event.target.closest('.topic-prompt');
+    if (promptBtn) {
+      input.value = stripDraftPrefix(promptBtn.dataset.question);
+      if (!input.disabled) {
+        input.focus();
+      }
+    }
+  });
 }
 
 nameSubmit.addEventListener('click', handleNameSubmit);
