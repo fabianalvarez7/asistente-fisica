@@ -15,25 +15,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Wake the Space and touch Turso
+      - name: Wake the Space without touching Turso
         run: |
           set -euo pipefail
 
           SPACE_URL="https://fabianalvarez7-asistente-fisica-unr.hf.space"
 
-          # GET /history with a system student name. First call creates
-          # the student (with welcome message); subsequent calls just
-          # return it. Either way, this:
+          # GET /topics is a read-only warm-up. It deliberately does not call
+          # /history because the keepalive job must not create a synthetic
+          # student, write a welcome message, or exercise Turso. This:
           #   1. Wakes the HF Space container if it was asleep.
-          #   2. Exercises the persistence layer so the Turso connection
-          #      stays warm and the free-tier DB doesn't get evicted.
-          # If /history returns 200, both the Space and Turso are
-          # reachable. If it returns 500, the Space is broken (and the
-          # demo will need a manual restart from the HF UI).
+          #   2. Confirms that the public app can answer a cheap request.
+          # Keeping the warm-up write-free avoids coupling Space wake-up to
+          # history availability and avoids polluting the conversation store.
+          # If /topics returns 200, the Space is reachable. If it returns
+          # anything else, the Space is broken (and the demo will need a
+          # manual restart from the HF UI).
           response=$(curl -sS -o /tmp/keepalive.json \
             -w "%{http_code}" \
             --max-time 30 \
-            "${SPACE_URL}/history?student_name=_keepalive")
+            "${SPACE_URL}/topics")
 
           if [ "$response" != "200" ]; then
             echo "::error::Space returned HTTP $response, expected 200"
