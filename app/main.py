@@ -5,11 +5,13 @@ HTTP/SSE to the generator, serves the static chat UI, and orchestrates the
 per-student conversation history persisted by rag/history.py.
 """
 
-from dotenv import load_dotenv
-load_dotenv()
-
+from contextlib import asynccontextmanager
+import asyncio
+from functools import partial
 import logging
 import os
+
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,6 +36,13 @@ from rag.history import (
     save_message,
     get_history,
     delete_message,
+)
+from rag.history_async import (
+    DEFAULT_HISTORY_TIMEOUT_SECONDS,
+    Deadline,
+    bounded_call,
+    enqueue_write,
+    get_write_worker,
 )
 from rag.chain import generate_response
 from rag.retrievers import VectorStore
@@ -80,6 +89,24 @@ try:
 except ValueError:
     HISTORY_WINDOW = 10
 
+
+def _parse_history_timeout(raw: str | None) -> float:
+    """Parse the history availability budget without making startup fragile."""
+    try:
+        value = (
+            float(raw)
+            if raw is not None
+            else DEFAULT_HISTORY_TIMEOUT_SECONDS
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_HISTORY_TIMEOUT_SECONDS
+    return value if value > 0 else DEFAULT_HISTORY_TIMEOUT_SECONDS
+
+
+HISTORY_TIMEOUT_SECONDS = _parse_history_timeout(
+    os.getenv("HISTORY_TIMEOUT_SECONDS")
+)
+
 ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un momento."
 
@@ -115,20 +142,56 @@ def _log_history_failure(operation: str, exc: HistoryUnavailableError) -> None:
     )
 
 
+def _log_write_observation_failure(operation: str) -> None:
+    """Use the existing redacted degradation log for async write outcomes."""
+    _log_history_failure(operation, HistoryUnavailableError("write unavailable"))
+
+
+def _queued_save_message(student_id: int, role: str, content: str):
+    """Keep already-classified history failures terminal at the queue edge."""
+    try:
+        return save_message(student_id, role, content)
+    except HistoryUnavailableError as exc:
+        # The sync boundary attaches the original driver error as __cause__.
+        # A cause-less wrapper is already classified/exhausted and must not
+        # consume a later queued turn during retry-in-place backoff.
+        if exc.__cause__ is None:
+            return None
+        raise
+
+
+def _enqueue_history_write(fn, /, *args):
+    """Enqueue persistence using the same budget as awaited history calls."""
+    return enqueue_write(fn, *args, call_timeout=HISTORY_TIMEOUT_SECONDS)
+
+
+def _next_token(tokens):
+    """Pull one token in a worker thread without leaking StopIteration."""
+    try:
+        return next(tokens), True
+    except StopIteration:
+        return None, False
+
+
 # -----------------------------------------------------------------------------
-# Schema init — safe to call repeatedly (CREATE TABLE IF NOT EXISTS)
-# -----------------------------------------------------------------------------
-try:
-    init_db()
-except HistoryUnavailableError as exc:
-    # History is optional for chat availability. Requests will retry through
-    # the persistence boundary without switching to another database.
-    _log_history_failure("initialize", exc)
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Bootstrap history without allowing persistence to block app startup."""
+    try:
+        await bounded_call(init_db, timeout=HISTORY_TIMEOUT_SECONDS)
+    except HistoryUnavailableError as exc:
+        _log_history_failure("initialize", exc)
+
+    get_write_worker(call_timeout=HISTORY_TIMEOUT_SECONDS).ensure_running()
+    try:
+        yield
+    finally:
+        await get_write_worker(call_timeout=HISTORY_TIMEOUT_SECONDS).shutdown()
 
 # -----------------------------------------------------------------------------
 # App
 # -----------------------------------------------------------------------------
-app = FastAPI(title="Asistente de Física 1")
+app = FastAPI(title="Asistente de Física 1", lifespan=lifespan)
 
 
 class NoCacheMiddleware(BaseHTTPMiddleware):
@@ -186,48 +249,62 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
     student_id = None
     user_message_id = None
+    user_write_timed_out = False
     history = []
     history_degraded = False
 
     try:
-        student_id = get_or_create_student(name)
+        student_id = await bounded_call(
+            get_or_create_student, name, timeout=deadline.left
+        )
     except HistoryUnavailableError as exc:
         _log_history_failure("get_or_create_student", exc)
         history_degraded = True
 
     if student_id is not None:
-        try:
-            user_message_id = save_message(student_id, "user", req.query)
-        except HistoryUnavailableError as exc:
-            _log_history_failure("save_user_message", exc)
+        user_pending = _enqueue_history_write(
+            _queued_save_message, student_id, "user", req.query
+        )
+        user_message_id = await user_pending.resolve(deadline.left)
+        user_write_timed_out = (
+            user_message_id is None and not user_pending.future.done()
+        )
+        if user_message_id is None:
+            _log_write_observation_failure("save_user_message")
             history_degraded = True
 
         try:
-            history = get_history(student_id, limit=HISTORY_WINDOW)
+            history = await bounded_call(
+                partial(get_history, student_id, limit=HISTORY_WINDOW),
+                timeout=deadline.left,
+            )
         except HistoryUnavailableError as exc:
             _log_history_failure("read_recent_history", exc)
             history_degraded = True
 
-    def event_generator():
+    async def event_generator():
         nonlocal history_degraded
         buffer = ""
         failed = False
         fallback_save_attempted = False
 
-        def fallback_message_id_frame():
+        async def fallback_message_id_frame():
             nonlocal fallback_save_attempted
             if student_id is None or fallback_save_attempted:
                 return None
 
             fallback_save_attempted = True
-            try:
-                assistant_message_id = save_message(
-                    student_id, "assistant", ERROR_FALLBACK
-                )
-            except HistoryUnavailableError as exc:
-                _log_history_failure("save_assistant_error", exc)
+            fallback_pending = _enqueue_history_write(
+                _queued_save_message, student_id, "assistant", ERROR_FALLBACK
+            )
+            assistant_message_id = await fallback_pending.resolve(
+                HISTORY_TIMEOUT_SECONDS
+            )
+            if assistant_message_id is None:
+                _log_write_observation_failure("save_assistant_error")
                 return None
 
             return (
@@ -235,8 +312,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 f"data: {assistant_message_id}\n\n"
             )
 
-        def generation_error_frames():
-            message_id_frame = fallback_message_id_frame()
+        async def generation_error_frames():
+            message_id_frame = await fallback_message_id_frame()
             if message_id_frame is not None:
                 yield message_id_frame
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
@@ -258,21 +335,23 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         try:
             tokens = iter(generate_response(req.query, history=history))
         except Exception:  # noqa: BLE001
-            yield from generation_error_frames()
+            async for frame in generation_error_frames():
+                yield frame
             return
 
         while True:
             try:
-                token = next(tokens)
-            except StopIteration:
-                return
+                token, has_token = await asyncio.to_thread(_next_token, tokens)
+                if not has_token:
+                    return
             except Exception:  # noqa: BLE001
-                yield from generation_error_frames()
+                async for frame in generation_error_frames():
+                    yield frame
                 return
 
             if token.startswith("event: error"):
                 failed = True
-                message_id_frame = fallback_message_id_frame()
+                message_id_frame = await fallback_message_id_frame()
                 if message_id_frame is not None:
                     yield message_id_frame
                 yield token
@@ -282,26 +361,31 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 payload = token[6:].removesuffix("\n\n")
                 if payload == "[DONE]":
                     if not failed and student_id is not None:
-                        try:
-                            assistant_message_id = save_message(
-                                student_id, "assistant", buffer
+                        assistant_pending = _enqueue_history_write(
+                            _queued_save_message, student_id, "assistant", buffer
+                        )
+                        if not user_write_timed_out:
+                            assistant_message_id = await assistant_pending.resolve(
+                                HISTORY_TIMEOUT_SECONDS
                             )
-                        except HistoryUnavailableError as exc:
-                            _log_history_failure("save_assistant_message", exc)
-                            # Mid-stream degradation: history was OK at
-                            # request entry but the assistant write failed.
-                            # Re-announce so the banner shows up if it
-                            # wasn't visible already.
-                            yield (
-                                f"event: {HISTORY_STATUS_EVENT}\n"
-                                f"data: {HISTORY_STATUS_DEGRADED}\n\n"
-                            )
-                            history_degraded = True
-                        else:
-                            yield (
-                                "event: assistant_message_id\n"
-                                f"data: {assistant_message_id}\n\n"
-                            )
+                            if assistant_message_id is None:
+                                _log_write_observation_failure(
+                                    "save_assistant_message"
+                                )
+                                # Mid-stream degradation: history was OK at
+                                # request entry but the assistant write failed.
+                                # Re-announce so the banner shows up if it
+                                # wasn't visible already.
+                                yield (
+                                    f"event: {HISTORY_STATUS_EVENT}\n"
+                                    f"data: {HISTORY_STATUS_DEGRADED}\n\n"
+                                )
+                                history_degraded = True
+                            else:
+                                yield (
+                                    "event: assistant_message_id\n"
+                                    f"data: {assistant_message_id}\n\n"
+                                )
                     yield token
                     return
                 buffer += payload
@@ -326,24 +410,34 @@ async def get_history_endpoint(student_name: str):
 
     operation = "lookup_student"
     history_degraded = False
+    deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
     try:
-        student_id = get_student_by_name(name)
+        student_id = await bounded_call(
+            get_student_by_name, name, timeout=deadline.left
+        )
         if student_id is None:
             # First time we see this name: create the student and drop the
             # welcome message into the conversation so it survives reloads.
             operation = "create_student"
-            student_id = get_or_create_student(name)
+            student_id = await bounded_call(
+                get_or_create_student, name, timeout=deadline.left
+            )
             operation = "save_welcome_message"
-            try:
-                save_message(
-                    student_id, "assistant", WELCOME_MESSAGE.format(name=name)
-                )
-            except HistoryUnavailableError as exc:
-                _log_history_failure("save_welcome_message", exc)
+            welcome_pending = _enqueue_history_write(
+                _queued_save_message,
+                student_id,
+                "assistant",
+                WELCOME_MESSAGE.format(name=name),
+            )
+            welcome_message_id = await welcome_pending.resolve(deadline.left)
+            if welcome_message_id is None:
+                _log_write_observation_failure("save_welcome_message")
                 history_degraded = True
 
         operation = "read_history"
-        messages = get_history(student_id)
+        messages = await bounded_call(
+            get_history, student_id, timeout=deadline.left
+        )
     except HistoryUnavailableError as exc:
         _log_history_failure(operation, exc)
         messages = []
@@ -359,16 +453,23 @@ async def delete_message_endpoint(message_id: int, student_name: str):
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
     try:
-        message_owner = get_message_owner(message_id)
+        message_owner = await bounded_call(
+            get_message_owner, message_id, timeout=deadline.left
+        )
         if message_owner is None:
             raise HTTPException(status_code=404, detail="message not found")
 
-        requester_id = get_student_by_name(name)
+        requester_id = await bounded_call(
+            get_student_by_name, name, timeout=deadline.left
+        )
         if requester_id is None or message_owner != requester_id:
             raise HTTPException(status_code=403, detail="not authorized")
 
-        delete_message(message_id, requester_id)
+        await bounded_call(
+            delete_message, message_id, requester_id, timeout=deadline.left
+        )
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
