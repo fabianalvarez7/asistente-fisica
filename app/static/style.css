@@ -11,9 +11,8 @@
  *   3. Sidebar (brand + topics index)
  *   4. Chat container (messages, input areas, footer)
  *   5. Messages (bubble variants, including the welcome greeting)
- *   6. Per-message delete button
- *   7. Input areas (typed-name identification + chat form)
- *   8. Hint + disclaimer
+ *   6. Input areas (typed-name identification + chat form)
+ *   7. Hint + disclaimer
  * ========================================================================= */
 
 * {
@@ -332,46 +331,6 @@ body {
   color: var(--color-text-muted);
   font-style: italic;
   font-weight: var(--font-weight-regular);
-}
-
-/* -------------------------------------------------------------------------
- * Per-message delete button
- * ------------------------------------------------------------------------- */
-
-.delete-btn {
-  position: absolute;
-  top: var(--space-xs);
-  right: var(--space-xs);
-  width: 1.25rem;
-  height: 1.25rem;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-pill);
-  background-color: rgba(0, 0, 0, 0.15);
-  color: inherit;
-  font-size: var(--font-size-sm);
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.delete-btn:hover {
-  background-color: rgba(0, 0, 0, 0.3);
-}
-
-.delete-btn:disabled {
-  opacity: 0;
-  cursor: default;
-}
-
-.message.user .delete-btn {
-  background-color: rgba(255, 255, 255, 0.4);
-}
-
-.message.user .delete-btn:hover {
-  background-color: rgba(255, 255, 255, 0.6);
 }
 
 /* -------------------------------------------------------------------------

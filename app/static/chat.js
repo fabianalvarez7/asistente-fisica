@@ -114,26 +114,15 @@ function createMessageElement(role) {
   li.className = `message ${role}`;
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  const deleteBtn = document.createElement('button');
-  deleteBtn.type = 'button';
-  deleteBtn.className = 'delete-btn';
-  deleteBtn.setAttribute('aria-label', 'Eliminar mensaje');
-  deleteBtn.textContent = '×';
   const content = document.createElement('span');
   content.className = 'bubble-content';
-  bubble.appendChild(deleteBtn);
   bubble.appendChild(content);
   li.appendChild(bubble);
-  return { li, bubble, content, deleteBtn };
+  return { li, bubble, content };
 }
 
 function renderMessage(msg, index = -1) {
-  const { li, bubble, content, deleteBtn } = createMessageElement(msg.role);
-  if (msg.id != null) {
-    deleteBtn.dataset.messageId = msg.id;
-  } else {
-    deleteBtn.disabled = true;
-  }
+  const { li, bubble, content } = createMessageElement(msg.role);
 
   // Welcome greeting: the first assistant turn the student sees after
   // identifying. We recognize it by position (index 0), role, and the fact
@@ -171,15 +160,14 @@ function appendUserMessage(text) {
 }
 
 function appendAssistantPlaceholder() {
-  const { li, bubble, content, deleteBtn } = createMessageElement('assistant');
+  const { li, bubble, content } = createMessageElement('assistant');
   li.classList.add('loading');
-  deleteBtn.disabled = true;
   messages.appendChild(li);
   messages.scrollTop = messages.scrollHeight;
-  return { li, bubble, content, deleteBtn };
+  return { li, bubble, content };
 }
 
-function processFrame(frame, assistant, userLi) {
+function processFrame(frame, assistant) {
   const lines = frame.split('\n');
   let eventName = null;
   let dataValue = null;
@@ -208,18 +196,7 @@ function processFrame(frame, assistant, userLi) {
     return;
   }
 
-  if (eventName === 'user_message_id' && userLi) {
-    const deleteBtn = userLi.querySelector('.delete-btn');
-    if (deleteBtn) {
-      deleteBtn.dataset.messageId = dataValue;
-      deleteBtn.disabled = false;
-    }
-    return;
-  }
-
-  if (eventName === 'assistant_message_id' && assistant) {
-    assistant.deleteBtn.dataset.messageId = dataValue;
-    assistant.deleteBtn.disabled = false;
+  if (eventName === 'user_message_id' || eventName === 'assistant_message_id') {
     return;
   }
 
@@ -238,7 +215,7 @@ function processFrame(frame, assistant, userLi) {
 async function sendMessage(query) {
   setLoading(true);
   clearHint();
-  const userLi = appendUserMessage(query);
+  appendUserMessage(query);
   const assistant = appendAssistantPlaceholder();
 
   try {
@@ -272,7 +249,7 @@ async function sendMessage(query) {
       while ((boundary = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
-        processFrame(frame, assistant, userLi);
+        processFrame(frame, assistant);
       }
     }
 
@@ -284,7 +261,7 @@ async function sendMessage(query) {
       while ((boundary = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
-        processFrame(frame, assistant, userLi);
+        processFrame(frame, assistant);
       }
     }
   } catch (err) {
@@ -472,21 +449,6 @@ nameInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     handleNameSubmit();
   }
-});
-
-messages.addEventListener('click', async (event) => {
-  const deleteBtn = event.target.closest('.delete-btn');
-  if (!deleteBtn) return;
-  const messageId = deleteBtn.dataset.messageId;
-  if (!messageId || !studentName) return;
-  const resp = await fetch(
-    `/messages/${messageId}?student_name=${encodeURIComponent(studentName)}`,
-    { method: 'DELETE' }
-  );
-  if (resp.ok) {
-    deleteBtn.closest('.message').remove();
-  }
-  // 403/404 are silently ignored so the UI stays consistent.
 });
 
 form.addEventListener('submit', (event) => {
