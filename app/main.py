@@ -10,6 +10,7 @@ import asyncio
 from functools import partial
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -23,9 +24,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # HF Spaces injects env vars directly (no .env file), so this only affects
 # local dev.
 load_dotenv()
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from dashboard.queries import get_kpis, get_topic_counts
 
 from rag.history import (
     HistoryUnavailableError,
@@ -109,6 +112,10 @@ HISTORY_TIMEOUT_SECONDS = _parse_history_timeout(
 
 ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un momento."
+DASHBOARD_ERROR_MESSAGE = (
+    "No se pudieron cargar las métricas en este momento. Intentá nuevamente más tarde."
+)
+_DASHBOARD_HTML = Path(__file__).resolve().parent / "static" / "dashboard.html"
 
 #: SSE ``event:`` name announcing the persistence layer's health for the
 #: current request. ``data:`` payload is ``"degraded"`` when at least one
@@ -498,6 +505,47 @@ async def get_topics():
         raise HTTPException(status_code=503, detail=f"Topics error: {exc!r}")
 
     return {"unidades": unidades}
+
+
+@app.get("/api/dashboard")
+async def get_dashboard_data():
+    """Return the anonymous aggregate data used by the public dashboard.
+
+    The query module owns all database access and classification logic. This
+    transport layer deliberately selects only the approved public fields so a
+    future query change cannot accidentally expose message text or identifiers.
+    """
+    try:
+        deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
+        kpis = await bounded_call(get_kpis, timeout=deadline.left)
+        topic_counts = await bounded_call(get_topic_counts, timeout=deadline.left)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Public dashboard unavailable (error_type=%s)",
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=503, detail=DASHBOARD_ERROR_MESSAGE) from exc
+
+    return {
+        "total_questions": kpis["total_queries"],
+        "students_represented": kpis["unique_students"],
+        "latest_activity": kpis["last_activity"],
+        "topic_counts": [
+            {
+                "number": item["number"],
+                "title": item["title"],
+                "count": item["count"],
+            }
+            for item in topic_counts
+        ],
+        "topic_counts_approximate": True,
+    }
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard_page():
+    """Serve the read-only public dashboard without requiring Streamlit."""
+    return FileResponse(_DASHBOARD_HTML)
 
 
 # Serve the chat UI and its assets. Routes declared above take precedence;

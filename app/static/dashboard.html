@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de profesores — FaradAI</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dashboard-header">
+      <a class="brand" href="/" aria-label="Volver al chat de FaradAI">
+        <img src="/img/logo-icon.svg" alt="" class="brand-icon" aria-hidden="true">
+        <img src="/img/logo-wordmark.svg" alt="FaradAI" class="brand-wordmark">
+      </a>
+      <div>
+        <p class="eyebrow">Asistente de Física 1</p>
+        <h1>Panel de profesores</h1>
+      </div>
+    </header>
+
+    <main>
+      <p class="intro">
+        Información agregada para detectar qué unidades pueden necesitar más refuerzo.
+        Este panel no muestra preguntas ni datos identificatorios.
+      </p>
+
+      <div id="dashboard-error" class="dashboard-message dashboard-message--error" role="alert" hidden>
+        No se pudieron cargar las métricas en este momento. Intentá nuevamente más tarde.
+      </div>
+
+      <section class="kpi-grid" aria-label="Indicadores generales">
+        <article class="kpi-card">
+          <p class="kpi-label">Preguntas de estudiantes</p>
+          <p id="total-questions" class="kpi-value">—</p>
+        </article>
+        <article class="kpi-card">
+          <p class="kpi-label">Estudiantes representados</p>
+          <p id="students-represented" class="kpi-value">—</p>
+        </article>
+        <article class="kpi-card">
+          <p class="kpi-label">Última actividad</p>
+          <p id="latest-activity" class="kpi-value kpi-value--text">—</p>
+        </article>
+      </section>
+
+      <section class="topics-card" aria-labelledby="topics-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Distribución temática</p>
+            <h2 id="topics-title">Preguntas por unidad</h2>
+          </div>
+          <span class="approximate-badge">Aproximada</span>
+        </div>
+        <p class="section-note">
+          La asignación se realiza con palabras clave y puede no reflejar exactamente el tema de cada pregunta.
+        </p>
+        <div id="topic-counts" class="topic-counts" aria-live="polite">
+          <p class="empty-state">Cargando métricas…</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="dashboard-footer">
+      <a href="/">Volver al chat</a>
+      <span>Panel público de evaluación</span>
+    </footer>
+  </div>
+
+  <script defer src="/dashboard.js"></script>
+</body>
+</html>

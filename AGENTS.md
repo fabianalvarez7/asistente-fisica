@@ -52,7 +52,7 @@ These are not preferences. They are the project's hard boundaries.
 | Persistence | **SQLite** | File-based, zero setup, easy to migrate to Postgres if the prototype grows. |
 | PDF → Markdown | **pymupdf4llm** (start), with `marker-pdf` or **Mathpix** as plan B if formulas/images are lost | pymupdf4llm is the lightest starting point. Mathpix has a 1000-page/month free tier. |
 | Frontend (chat) | **Plain HTML + CSS + JS** served by FastAPI | One page. No React, no SPA. Fetch to `/chat` endpoint. |
-| Frontend (dashboard) | **Streamlit** | Ideal for static analytics, charts, filters. No conversational state. |
+| Frontend (dashboard) | **Plain HTML + CSS + JS served by FastAPI** | Public read-only aggregate dashboard with no conversational state. Streamlit remains as a fallback/reference implementation. |
 | Deploy | **Hugging Face Spaces Docker** (free cpu-basic) | 16 GB RAM, supports Docker, ~48 h sleep. Replaces Render after OOM at 967 MB. |
 
 ## 5. Repository Structure
@@ -110,7 +110,8 @@ python scripts/indexar_pdfs.py
 # 6. Run the chat backend
 uvicorn app.main:app --reload
 
-# 7. Run the professor dashboard (separate terminal)
+# 7. Open the public professor dashboard at http://localhost:8000/dashboard
+# Optional fallback/reference dashboard (separate terminal):
 streamlit run dashboard/app.py
 ```
 
@@ -125,7 +126,7 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 1. **RAG first, Socratic layer later.** They are separate concerns. Mixing them makes the prompt and the retriever both harder to debug. Month 3 is dedicated to the Socratic layer.
 
-2. **Two frontends, not one.** Streamlit re-renders the whole app on every interaction. That fights a chat interface. Streamlit shines for the dashboard, where there is no conversational state. Each tool where it fits best.
+2. **Two UI surfaces, not one.** The chat and the public read-only dashboard are plain HTML/CSS/JS served by FastAPI so they share one deployable web app. The legacy Streamlit dashboard remains available as a fallback/reference, but the public dashboard does not depend on Streamlit.
 
 3. **Local embeddings, not an embedding API.** sentence-transformers is free, offline, and respects the "no network dependency" rule for embeddings. We could switch to an API later if quality demands it, but we are not starting there.
 
