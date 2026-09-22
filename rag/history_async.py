@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import multiprocessing
+import os
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -14,12 +16,108 @@ logger = logging.getLogger(__name__)
 MAX_QUEUE_SIZE = 1000
 MAX_ATTEMPTS = 5
 DEFAULT_HISTORY_TIMEOUT_SECONDS = 5.0
+_TURSO_URL_ENV = "TURSO_DATABASE_URL"
+_TURSO_TOKEN_ENV = "TURSO_AUTH_TOKEN"
+
+
+class HistoryCallTimeout(HistoryUnavailableError):
+    """A history call exceeded its budget before its worker returned."""
+
+
+class _ChildCallError(Exception):
+    """Fallback error when a child exception cannot cross the process pipe."""
+
+
+def uses_cancellable_boundary() -> bool:
+    """Return whether history is configured to use the remote Turso backend."""
+    return bool(os.getenv(_TURSO_URL_ENV) and os.getenv(_TURSO_TOKEN_ENV))
+
+
+def _run_in_child(connection, fn: Callable[..., Any], args: tuple[Any, ...]) -> None:
+    """Execute one synchronous call in an isolated process."""
+    try:
+        connection.send(("ok", fn(*args)))
+    except BaseException as exc:  # noqa: BLE001 - report every child failure
+        try:
+            connection.send(("error", exc))
+        except Exception:
+            connection.send(("error", _ChildCallError(type(exc).__name__)))
+    finally:
+        connection.close()
+
+
+def _stop_child(process) -> None:
+    """Terminate a timed-out child without waiting indefinitely for the driver."""
+    if not process.is_alive():
+        process.join()
+        return
+
+    process.terminate()
+    process.join(0.2)
+    if process.is_alive():
+        process.kill()
+        process.join(0.2)
+    if process.is_alive():
+        logger.error(
+            "history_child_cleanup_failed: child process remained alive after "
+            "terminate and kill attempts"
+        )
+
+
+async def _bounded_process_call(
+    fn: Callable[..., Any], args: tuple[Any, ...], timeout: float
+) -> Any:
+    """Run a synchronous remote-driver call where timeout can kill the caller."""
+    context = multiprocessing.get_context("spawn")
+    parent_connection, child_connection = context.Pipe(duplex=False)
+    process = context.Process(target=_run_in_child, args=(child_connection, fn, args))
+    process.daemon = True
+    started = False
+
+    try:
+        process.start()
+        started = True
+        child_connection.close()
+        deadline = asyncio.get_running_loop().time() + timeout
+
+        while True:
+            if parent_connection.poll():
+                status, value = parent_connection.recv()
+                if status == "ok":
+                    return value
+                raise value
+
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                logger.error(
+                    "history_call_timeout (operation=%s, timeout=%s)",
+                    getattr(fn, "__name__", type(fn).__name__),
+                    timeout,
+                )
+                raise HistoryCallTimeout("persistence call exceeded timeout")
+
+            if not process.is_alive():
+                raise HistoryUnavailableError("history worker process exited")
+            await asyncio.sleep(min(0.01, remaining))
+    finally:
+        if started:
+            _stop_child(process)
+        else:
+            child_connection.close()
+        parent_connection.close()
 
 
 async def bounded_call(fn: Callable[..., Any], /, *args: Any, timeout: float) -> Any:
-    """Run a synchronous history call off-loop and convert expiry to degradation."""
+    """Run a synchronous history call off-loop and convert expiry to degradation.
+
+    Turso calls run in a short-lived child process so a stalled synchronous
+    driver call can be terminated. Local SQLite keeps the lighter thread
+    boundary used for development.
+    """
     if timeout <= 0:
         raise HistoryUnavailableError("history budget exhausted")
+    if uses_cancellable_boundary():
+        return await _bounded_process_call(fn, args, timeout)
     try:
         return await asyncio.wait_for(asyncio.to_thread(fn, *args), timeout)
     except asyncio.TimeoutError as exc:
@@ -28,7 +126,7 @@ async def bounded_call(fn: Callable[..., Any], /, *args: Any, timeout: float) ->
             getattr(fn, "__name__", type(fn).__name__),
             timeout,
         )
-        raise HistoryUnavailableError("persistence call exceeded timeout") from exc
+        raise HistoryCallTimeout("persistence call exceeded timeout") from exc
 
 
 class Deadline:
@@ -148,10 +246,10 @@ class WriteWorker:
         for attempt in range(1, self.max_attempts + 1):
             item.attempt = attempt
             try:
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(item.fn, *item.args), self.call_timeout
+                result = await bounded_call(
+                    item.fn, *item.args, timeout=self.call_timeout
                 )
-            except asyncio.TimeoutError:
+            except HistoryCallTimeout:
                 item.pending._set_result(("timeout", None))
                 logger.error(
                     "history_write_dropped (reason=timeout, attempt=%s, role=%s, "

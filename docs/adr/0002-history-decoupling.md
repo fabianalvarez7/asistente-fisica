@@ -9,8 +9,10 @@
 Keep the chat stream available when Turso is unavailable or hangs by separating
 the request path from history persistence:
 
-1. Awaited history reads and startup initialization run through a bounded
-   `asyncio.to_thread` plus `asyncio.wait_for` boundary.
+1. Awaited history reads and startup initialization use a bounded child-process
+   boundary when Turso is configured. A timed-out synchronous libSQL call is
+   terminated with its process. The local SQLite fallback keeps the lighter
+   `asyncio.to_thread` plus `asyncio.wait_for` boundary for development.
 2. `HISTORY_TIMEOUT_SECONDS` controls that budget and defaults to 5 seconds.
    Invalid or non-positive values fall back to the default.
 3. Writes enter a bounded FIFO `asyncio.Queue` managed by one worker. The
@@ -39,8 +41,8 @@ so a history outage also became a chat outage.
 
 The keepalive workflow previously called `/history?student_name=_keepalive`.
 That woke the Space but also performed database work and created or reused a
-synthetic student. The warm-up concern is independent of history durability,
-so the workflow now calls the read-only `/topics` endpoint instead.
+synthetic student. It now calls the bounded, read-only `/health` endpoint so
+the schedule warms the Space and verifies persistence without changing data.
 
 ## Contracts
 
@@ -69,12 +71,12 @@ eligible for retry or degraded signaling.
 
 ## Abandoned synchronous calls
 
-`asyncio.wait_for` stops awaiting a timed-out `to_thread` call, but Python
-cannot cancel the synchronous function already running in its executor
-thread. Those abandoned calls can finish later. The queue is bounded, the
-executor limits the number of concurrent abandoned threads, and timed-out
-writes are not retried to avoid duplicate inserts. This is an accepted,
-bounded prototype trade-off rather than a claim of cancellation safety.
+For Turso, a timed-out synchronous driver call runs in a child process that is
+terminated before the timeout is reported. No abandoned driver thread remains
+in the application process, and timed-out writes are not retried to avoid
+duplicate inserts. The local SQLite fallback still uses `to_thread`; that
+development-only path retains Python's inability to cancel an already-running
+synchronous call.
 
 The request entry phase uses one deadline for its sequential history
 observations. A later assistant-write observation can add another timeout in
@@ -86,9 +88,9 @@ normal healthy path is faster because writes no longer gate generation.
 | Alternative | Reason for rejection |
 |---|---|
 | One `asyncio.create_task` per write | Request-scoped tasks can be cancelled at lifespan end and can grow without a bounded queue. |
-| A decorator around `rag/history.py` | The driver boundary is synchronous; an explicit wrapper makes the `to_thread`/timeout boundary visible and preserves tests that patch `app.main` callables. |
+| A decorator around `rag/history.py` | The driver boundary is synchronous; an explicit wrapper selects the cancellable child-process boundary for Turso, preserves the local SQLite thread fallback, and keeps tests that patch `app.main` callables. |
 | Retrying timed-out writes | The abandoned thread may still commit; retrying can create duplicate rows. |
-| Retiring the keepalive workflow | It would lose the warm-Space benefit without solving history availability. `/topics` keeps the wake-up and removes synthetic database writes. |
+| Retiring the keepalive workflow | It would lose the warm-Space benefit without solving history availability. `/health` keeps the wake-up and verifies persistence without synthetic database writes. |
 | SQLite-only production history | Container-local SQLite is lost when the Space sleeps or restarts. |
 | Supabase, Neon, or a paid Turso plan | Changing providers does not remove the prototype's need for bounded calls and would add cost or operational scope. |
 
@@ -99,8 +101,8 @@ the implementation change restores the previous fail-open behavior. Reverting
 also restores the old persistence coupling and the old keepalive side effect,
 so the operational documentation must be reverted with the implementation.
 
-The main positive consequence is that a hung history service cannot hold the
-SSE stream forever. The accepted costs are best-effort durability during
-outages, process-local queue loss on shutdown, possible executor threads that
-finish after timeout, and more operational logging to monitor worker-side
-defects and drops.
+The main positive consequence is that a hung Turso history service cannot hold
+the SSE stream forever or accumulate abandoned driver threads in the app
+process. The accepted costs are best-effort durability during outages,
+process-local queue loss on shutdown, child-process startup overhead, and more
+operational logging to monitor worker-side defects and drops.

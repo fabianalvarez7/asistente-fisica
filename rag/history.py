@@ -332,6 +332,12 @@ def init_db(db_path: str | None = None) -> None:
 
 
 @_reconnect_on_failure
+def check_history_health() -> None:
+    """Verify that the configured history backend accepts a read-only query."""
+    _get_connection().execute("SELECT 1").fetchone()
+
+
+@_reconnect_on_failure
 def get_or_create_student(display_name: str) -> int:
     """Return the id of the first student with this exact display_name.
 

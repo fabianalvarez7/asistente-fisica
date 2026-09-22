@@ -33,6 +33,7 @@ from dashboard.queries import get_kpis, get_topic_counts
 from rag.history import (
     HistoryUnavailableError,
     init_db,
+    check_history_health,
     get_or_create_student,
     get_student_by_name,
     get_message_owner,
@@ -40,6 +41,7 @@ from rag.history import (
     get_history,
     delete_message,
 )
+import rag.history_async as history_async
 from rag.history_async import (
     DEFAULT_HISTORY_TIMEOUT_SECONDS,
     Deadline,
@@ -169,6 +171,10 @@ def _queued_save_message(student_id: int, role: str, content: str):
 
 def _enqueue_history_write(fn, /, *args):
     """Enqueue persistence using the same budget as awaited history calls."""
+    if fn is _queued_save_message and history_async.uses_cancellable_boundary():
+        # The process boundary must receive a callable from rag.history, not
+        # this transport module, so spawn does not import the whole FastAPI app.
+        fn = save_message
     return enqueue_write(fn, *args, call_timeout=HISTORY_TIMEOUT_SECONDS)
 
 
@@ -188,6 +194,10 @@ async def lifespan(_app: FastAPI):
         await bounded_call(init_db, timeout=HISTORY_TIMEOUT_SECONDS)
     except HistoryUnavailableError as exc:
         _log_history_failure("initialize", exc)
+        try:
+            await bounded_call(check_history_health, timeout=HISTORY_TIMEOUT_SECONDS)
+        except HistoryUnavailableError as health_exc:
+            _log_history_failure("health_check_after_initialize", health_exc)
 
     get_write_worker(call_timeout=HISTORY_TIMEOUT_SECONDS).ensure_running()
     try:
@@ -451,6 +461,18 @@ async def get_history_endpoint(student_name: str):
         history_degraded = True
 
     return {"messages": messages, "degraded": history_degraded}
+
+
+@app.get("/health")
+async def health_endpoint():
+    """Report whether the history backend accepts a bounded read-only query."""
+    try:
+        await bounded_call(check_history_health, timeout=HISTORY_TIMEOUT_SECONDS)
+    except HistoryUnavailableError as exc:
+        _log_history_failure("health_check", exc)
+        raise HTTPException(status_code=503, detail="history unavailable") from exc
+
+    return {"status": "ok", "history": "ok"}
 
 
 @app.delete("/messages/{message_id}")
