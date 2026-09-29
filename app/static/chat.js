@@ -62,6 +62,14 @@ function escapeHtml(text) {
 }
 
 /**
+ * Render the small Markdown subset used by assistant responses.
+ * Escape first so model output can never become executable HTML.
+ */
+function renderAssistantMarkdown(text) {
+  return escapeHtml(text).replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+}
+
+/**
  * Escape regex metacharacters in user-provided text. Used to build a safe
  * pattern that matches the student's name literally inside the welcome
  * message content.
@@ -138,11 +146,15 @@ function renderMessage(msg, index = -1) {
 
   if (isWelcome) {
     bubble.classList.add('bubble-greeting');
-    const pattern = new RegExp(escapeRegex(studentName), '');
-    content.innerHTML = msg.content.replace(
+    const escapedContent = escapeHtml(msg.content);
+    const escapedName = escapeHtml(studentName);
+    const pattern = new RegExp(escapeRegex(escapedName), '');
+    content.innerHTML = escapedContent.replace(
       pattern,
-      `<span class="greeting-name">${escapeHtml(studentName)}</span>`
+      `<span class="greeting-name">${escapedName}</span>`
     );
+  } else if (msg.role === 'assistant') {
+    content.innerHTML = renderAssistantMarkdown(msg.content);
   } else {
     content.textContent = msg.content;
   }
@@ -162,6 +174,7 @@ function appendUserMessage(text) {
 function appendAssistantPlaceholder() {
   const { li, bubble, content } = createMessageElement('assistant');
   li.classList.add('loading');
+  content.rawText = '';
   messages.appendChild(li);
   messages.scrollTop = messages.scrollHeight;
   return { li, bubble, content };
@@ -202,12 +215,14 @@ function processFrame(frame, assistant) {
 
   if (dataValue === '[DONE]') {
     assistant.li.classList.remove('loading');
+    assistant.content.innerHTML = renderAssistantMarkdown(assistant.content.rawText);
     renderMathInBubble(assistant.bubble);
     return;
   }
 
   if (dataValue !== null) {
     assistant.li.classList.remove('loading');
+    assistant.content.rawText += dataValue;
     assistant.content.textContent += dataValue;
   }
 }
