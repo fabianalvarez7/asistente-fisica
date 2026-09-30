@@ -25,6 +25,8 @@ const loginHint = document.getElementById('login-hint');
 const appShell = document.getElementById('app-shell');
 const homeHero = document.getElementById('home-hero');
 const homeGreetingName = document.getElementById('home-greeting-name');
+const chatGreeting = document.getElementById('chat-greeting');
+const chatGreetingName = document.getElementById('chat-greeting-name');
 const chatView = document.getElementById('chat-view');
 const aboutView = document.getElementById('about-view');
 const aboutLink = document.getElementById('about-link');
@@ -63,9 +65,8 @@ function setHistoryBannerVisible(visible) {
 
 /**
  * HTML-escape user-provided text before injecting it into innerHTML. The
- * welcome greeting is the only place we render raw HTML, and only the
- * student's own name (from localStorage) ever lands inside the injected
- * span. Escaping is still required because typed names are arbitrary.
+ * assistant's Markdown formatting is applied only after escaping so typed
+ * names and model output cannot become executable HTML.
  */
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -78,15 +79,6 @@ function escapeHtml(text) {
  */
 function renderAssistantMarkdown(text) {
   return escapeHtml(text).replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
-}
-
-/**
- * Escape regex metacharacters in user-provided text. Used to build a safe
- * pattern that matches the student's name literally inside the welcome
- * message content.
- */
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -134,8 +126,13 @@ function setHomeHeroVisible(visible) {
   if (homeHero) homeHero.hidden = !visible;
 }
 
+function setChatGreetingVisible(visible) {
+  if (chatGreeting) chatGreeting.hidden = !visible;
+}
+
 function updateHomeGreeting() {
   if (homeGreetingName) homeGreetingName.textContent = studentName || '';
+  if (chatGreetingName) chatGreetingName.textContent = studentName || '';
 }
 
 function showView(view) {
@@ -195,31 +192,10 @@ function createMessageElement(role) {
   return { li, bubble, content };
 }
 
-function renderMessage(msg, index = -1) {
+function renderMessage(msg) {
   const { li, bubble, content } = createMessageElement(msg.role);
 
-  // Welcome greeting: the first assistant turn the student sees after
-  // identifying. We recognize it by position (index 0), role, and the fact
-  // that it contains the student's name. Render with the dedicated
-  // greeting styles and wrap the name in a serif-italic span so the brand
-  // wordmark tone carries over to the chat column.
-  const isWelcome = (
-    index === 0 &&
-    msg.role === 'assistant' &&
-    studentName &&
-    msg.content.includes(studentName)
-  );
-
-  if (isWelcome) {
-    bubble.classList.add('bubble-greeting');
-    const escapedContent = escapeHtml(msg.content);
-    const escapedName = escapeHtml(studentName);
-    const pattern = new RegExp(escapeRegex(escapedName), '');
-    content.innerHTML = escapedContent.replace(
-      pattern,
-      `<span class="greeting-name">${escapedName}</span>`
-    );
-  } else if (msg.role === 'assistant') {
+  if (msg.role === 'assistant') {
     content.innerHTML = renderAssistantMarkdown(msg.content);
   } else {
     content.textContent = msg.content;
@@ -298,7 +274,6 @@ async function sendMessage(query) {
   clearHint();
   if (homeHero && !homeHero.hidden) {
     setHomeHeroVisible(false);
-    renderMessage({ role: 'assistant', content: `¡Hola, ${studentName}!` }, 0);
   }
   appendUserMessage(query);
   const assistant = appendAssistantPlaceholder();
@@ -369,7 +344,8 @@ function startChat(name) {
   loginScreen.hidden = true;
   appShell.hidden = false;
   updateHomeGreeting();
-  setHomeHeroVisible(true);
+  setChatGreetingVisible(false);
+  setHomeHeroVisible(false);
   setChatEnabled(false);
   loadHistory().finally(() => setChatEnabled(true));
 }
@@ -387,6 +363,8 @@ function handleNameSubmit() {
 async function loadHistory() {
   if (!studentName) return;
   messages.innerHTML = '';
+  setChatGreetingVisible(false);
+  setHomeHeroVisible(false);
   try {
     const resp = await fetch(`/history?student_name=${encodeURIComponent(studentName)}`);
     if (!resp.ok) {
@@ -397,12 +375,16 @@ async function loadHistory() {
     const isWelcomeMessage = (msg) => (
       msg.role === 'assistant' && msg.content === `¡Hola, ${studentName}!`
     );
-    const hasConversationMessages = data.messages.some((msg) => !isWelcomeMessage(msg));
+    const conversationMessages = data.messages.filter((msg) => !isWelcomeMessage(msg));
+    const hasConversationMessages = conversationMessages.length > 0;
     setHomeHeroVisible(!hasConversationMessages);
+    setChatGreetingVisible(hasConversationMessages);
     if (hasConversationMessages) {
-      data.messages.forEach((msg, i) => renderMessage(msg, i));
+      conversationMessages.forEach((msg) => renderMessage(msg));
     }
   } catch (err) {
+    setChatGreetingVisible(false);
+    setHomeHeroVisible(true);
     showHint('No se pudo cargar el historial');
   }
 }
@@ -576,6 +558,8 @@ if (studentName) {
   loginScreen.hidden = true;
   appShell.hidden = false;
   updateHomeGreeting();
+  setChatGreetingVisible(false);
+  setHomeHeroVisible(false);
   setChatEnabled(false);
   loadHistory().finally(() => setChatEnabled(true));
 } else {

@@ -408,6 +408,25 @@ a {
   font-weight: var(--font-weight-medium);
 }
 
+.chat-greeting {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  flex: 0 0 auto;
+  padding: var(--space-md) clamp(1rem, 6vw, 5rem);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.chat-greeting h1 {
+  width: min(100%, 55rem);
+  margin: 0 auto;
+  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+}
+
 .home-hero {
   flex: 1;
   display: flex;
@@ -508,16 +527,6 @@ a {
   color: var(--color-text);
 }
 
-.bubble-greeting {
-  max-width: 90%;
-}
-
-.bubble-greeting .bubble-content {
-  font-size: var(--font-size-2xl);
-  line-height: var(--line-height-tight);
-  font-weight: var(--font-weight-medium);
-}
-
 .loading .bubble::after {
   content: " Cargando...";
   color: var(--color-text-muted);
@@ -611,10 +620,27 @@ a {
   text-align: center;
 }
 
-.about-content h1 em {
-  color: var(--color-brand-primary-strong);
-  font-family: var(--font-family-serif);
-  font-weight: var(--font-weight-regular);
+.about-wordmark {
+  display: inline-block;
+  width: clamp(8rem, 26vw, 14rem);
+  aspect-ratio: 238 / 50;
+  margin-left: 0.12em;
+  vertical-align: -0.08em;
+  background-color: var(--color-brand-primary-strong);
+  -webkit-mask: url("/img/logo-wordmark.svg") center / contain no-repeat;
+  mask: url("/img/logo-wordmark.svg") center / contain no-repeat;
+}
+
+.about-wordmark-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .about-lead {
@@ -759,6 +785,14 @@ a {
 
   .home-hero {
     padding: 15vh 1rem 1.5rem;
+  }
+
+  .chat-greeting {
+    padding: var(--space-sm) 1rem;
+  }
+
+  .chat-greeting h1 {
+    font-size: 1.25rem;
   }
 
   .home-hero h1 {

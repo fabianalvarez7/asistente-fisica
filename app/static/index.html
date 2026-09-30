@@ -102,6 +102,10 @@
         El historial no está disponible por ahora. Podés seguir preguntando.
       </div>
 
+      <header id="chat-greeting" class="chat-greeting" aria-labelledby="chat-greeting-title" hidden>
+        <h1 id="chat-greeting-title">¡Hola, <span id="chat-greeting-name" class="greeting-name"></span>!</h1>
+      </header>
+
       <section id="home-hero" class="home-hero" aria-labelledby="home-greeting">
         <div class="home-brand" role="img" aria-label="FaradAI">
           <img src="/img/logo-icon.svg" alt="" class="home-brand-icon" aria-hidden="true">
@@ -133,7 +137,7 @@
 
       <section id="about-view" class="about-view" hidden aria-labelledby="about-title">
         <div class="about-content">
-          <h1 id="about-title">Sobre <em>FaradAI</em></h1>
+          <h1 id="about-title">Sobre <span class="about-wordmark" aria-hidden="true"></span><span class="about-wordmark-label">FaradAI</span></h1>
           <p class="about-lead">Es un asistente virtual desarrollado para la Facultad de Ciencias Bioquímicas y Farmacéuticas de la Universidad Nacional de Rosario.</p>
 
           <section class="about-block about-block-split">
