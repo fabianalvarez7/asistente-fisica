@@ -20,7 +20,18 @@ const hint = document.getElementById('hint');
 const sendBtn = document.getElementById('send-btn');
 const nameArea = document.getElementById('name-area');
 const nameInput = document.getElementById('student-name');
-const nameSubmit = document.getElementById('name-submit');
+const loginScreen = document.getElementById('login-screen');
+const loginHint = document.getElementById('login-hint');
+const appShell = document.getElementById('app-shell');
+const homeHero = document.getElementById('home-hero');
+const homeGreetingName = document.getElementById('home-greeting-name');
+const chatView = document.getElementById('chat-view');
+const aboutView = document.getElementById('about-view');
+const aboutLink = document.getElementById('about-link');
+const homeLink = document.getElementById('home-link');
+const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+const mobileMenuClose = document.getElementById('mobile-menu-close');
+const sidebar = document.querySelector('.sidebar');
 
 const MAX_CHARS = 500;
 const STORAGE_KEY = 'student_name';
@@ -111,10 +122,65 @@ function setLoading(isLoading) {
 
 function showHint(text) {
   hint.textContent = text;
+  if (loginHint) loginHint.textContent = text;
 }
 
 function clearHint() {
   hint.textContent = '';
+  if (loginHint) loginHint.textContent = '';
+}
+
+function setHomeHeroVisible(visible) {
+  if (homeHero) homeHero.hidden = !visible;
+}
+
+function updateHomeGreeting() {
+  if (homeGreetingName) homeGreetingName.textContent = studentName || '';
+}
+
+function showView(view) {
+  const showAbout = view === 'about';
+  chatView.hidden = showAbout;
+  aboutView.hidden = !showAbout;
+  closeMobileMenu();
+}
+
+function setSidebarInteractive(isOpen) {
+  if (!sidebar) return;
+  const isMobile = window.matchMedia?.('(max-width: 768px)').matches ?? false;
+  sidebar.inert = isMobile && !isOpen;
+}
+
+function updateSidebarAccessibility() {
+  setSidebarInteractive(sidebar?.classList.contains('is-open') ?? false);
+}
+
+function closeMobileMenu(restoreFocus = true) {
+  if (!sidebar || !mobileMenuToggle) return;
+  const wasOpen = sidebar.classList.contains('is-open');
+  sidebar.classList.remove('is-open');
+  mobileMenuToggle.setAttribute('aria-expanded', 'false');
+  mobileMenuToggle.setAttribute('aria-label', 'Abrir menú');
+  setSidebarInteractive(false);
+  if (restoreFocus && wasOpen) mobileMenuToggle.focus();
+}
+
+function openMobileMenu() {
+  if (!sidebar || !mobileMenuToggle) return;
+  sidebar.classList.add('is-open');
+  sidebar.inert = false;
+  mobileMenuToggle.setAttribute('aria-expanded', 'true');
+  mobileMenuToggle.setAttribute('aria-label', 'Cerrar menú');
+  mobileMenuClose?.focus();
+}
+
+function toggleMobileMenu() {
+  if (!sidebar || !mobileMenuToggle) return;
+  if (sidebar.classList.contains('is-open')) {
+    closeMobileMenu();
+  } else {
+    openMobileMenu();
+  }
 }
 
 function createMessageElement(role) {
@@ -230,6 +296,10 @@ function processFrame(frame, assistant) {
 async function sendMessage(query) {
   setLoading(true);
   clearHint();
+  if (homeHero && !homeHero.hidden) {
+    setHomeHeroVisible(false);
+    renderMessage({ role: 'assistant', content: `¡Hola, ${studentName}!` }, 0);
+  }
   appendUserMessage(query);
   const assistant = appendAssistantPlaceholder();
 
@@ -296,9 +366,12 @@ function setChatEnabled(enabled) {
 function startChat(name) {
   studentName = name;
   localStorage.setItem(STORAGE_KEY, name);
-  nameArea.style.display = 'none';
-  setChatEnabled(true);
-  loadHistory();
+  loginScreen.hidden = true;
+  appShell.hidden = false;
+  updateHomeGreeting();
+  setHomeHeroVisible(true);
+  setChatEnabled(false);
+  loadHistory().finally(() => setChatEnabled(true));
 }
 
 function handleNameSubmit() {
@@ -321,7 +394,14 @@ async function loadHistory() {
     }
     const data = await resp.json();
     setHistoryBannerVisible(Boolean(data.degraded));
-    data.messages.forEach((msg, i) => renderMessage(msg, i));
+    const isWelcomeMessage = (msg) => (
+      msg.role === 'assistant' && msg.content === `¡Hola, ${studentName}!`
+    );
+    const hasConversationMessages = data.messages.some((msg) => !isWelcomeMessage(msg));
+    setHomeHeroVisible(!hasConversationMessages);
+    if (hasConversationMessages) {
+      data.messages.forEach((msg, i) => renderMessage(msg, i));
+    }
   } catch (err) {
     showHint('No se pudo cargar el historial');
   }
@@ -391,10 +471,6 @@ async function loadTopics() {
 
           if (raw.startsWith('[BORRADOR')) {
             promptBtn.classList.add('topic-prompt--draft');
-            const badge = document.createElement('span');
-            badge.className = 'draft-badge';
-            badge.textContent = 'Borrador';
-            promptBtn.appendChild(badge);
           }
 
           promptBtn.appendChild(document.createTextNode(stripDraftPrefix(raw)));
@@ -452,6 +528,7 @@ if (topicsContainer) {
     const promptBtn = event.target.closest('.topic-prompt');
     if (promptBtn) {
       input.value = stripDraftPrefix(promptBtn.dataset.question);
+      closeMobileMenu();
       if (!input.disabled) {
         input.focus();
       }
@@ -459,12 +536,23 @@ if (topicsContainer) {
   });
 }
 
-nameSubmit.addEventListener('click', handleNameSubmit);
-nameInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    handleNameSubmit();
+nameArea.addEventListener('submit', (event) => {
+  event.preventDefault();
+  handleNameSubmit();
+});
+
+aboutLink.addEventListener('click', () => showView(aboutView.hidden ? 'about' : 'chat'));
+homeLink.addEventListener('click', () => showView('chat'));
+mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+mobileMenuClose.addEventListener('click', () => closeMobileMenu());
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && sidebar?.classList.contains('is-open')) {
+    event.preventDefault();
+    closeMobileMenu();
   }
 });
+window.addEventListener('resize', updateSidebarAccessibility);
+window.addEventListener('orientationchange', updateSidebarAccessibility);
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -485,11 +573,14 @@ form.addEventListener('submit', (event) => {
 });
 
 if (studentName) {
-  nameArea.style.display = 'none';
-  setChatEnabled(true);
-  loadHistory();
+  loginScreen.hidden = true;
+  appShell.hidden = false;
+  updateHomeGreeting();
+  setChatEnabled(false);
+  loadHistory().finally(() => setChatEnabled(true));
 } else {
   setChatEnabled(false);
 }
 
+setSidebarInteractive(false);
 loadTopics();

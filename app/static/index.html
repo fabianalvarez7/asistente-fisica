@@ -10,17 +10,74 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 <body>
-  <div class="app-shell">
+  <section id="login-screen" class="login-screen" aria-labelledby="login-title">
+    <div class="login-brand" role="img" aria-label="FaradAI">
+      <img src="/img/logo-icon.svg" alt="" class="login-brand-icon" aria-hidden="true">
+      <img src="/img/logo-wordmark.svg" alt="" class="login-brand-wordmark" aria-hidden="true">
+    </div>
+    <p class="login-subtitle">
+      <span>Asistente virtual de física 1</span>
+      <span>Universidad Nacional de Rosario</span>
+    </p>
+
+    <form id="name-area" class="login-card" autocomplete="off">
+      <h1 id="login-title">Iniciar sesión</h1>
+      <input
+        id="student-name"
+        type="text"
+        name="student_name"
+        autocomplete="off"
+        autocapitalize="words"
+        spellcheck="false"
+        inputmode="text"
+        enterkeyhint="continue"
+        maxlength="100"
+        placeholder="Ingresá tu nombre"
+        aria-label="Nombre"
+      />
+      <button type="submit" id="name-submit">Continuar</button>
+
+      <div class="login-divider" aria-hidden="true"><span>o</span></div>
+      <button
+        type="button"
+        class="social-button"
+        disabled
+        aria-disabled="true"
+        aria-label="Continuar con Google (no disponible por ahora)"
+      >
+        <svg class="google-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="#4285F4" d="M21.35 12.27c0-.79-.07-1.55-.23-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42Z"/>
+          <path fill="#34A853" d="M12 22c2.64 0 4.86-.87 6.44-2.36l-3.14-2.45c-.87.58-1.98.93-3.3.93-2.55 0-4.71-1.72-5.49-4.04H3.27v2.53A9.72 9.72 0 0 0 12 22Z"/>
+          <path fill="#FBBC05" d="M6.51 14.08A5.84 5.84 0 0 1 6.2 12c0-.72.12-1.42.31-2.08V7.39H3.27A9.72 9.72 0 0 0 2.2 12c0 1.67.4 3.25 1.07 4.61l3.24-2.53Z"/>
+          <path fill="#EA4335" d="M12 5.88c1.44 0 2.73.5 3.75 1.48l2.81-2.81C16.85 2.93 14.63 2 12 2a9.72 9.72 0 0 0-8.73 5.39l3.24 2.53C7.29 7.6 9.45 5.88 12 5.88Z"/>
+        </svg>
+        Continuar con Google
+      </button>
+
+      <p class="privacy-copy">
+        Al iniciar sesión, ninguna información personal será entregada al cuerpo docente. Conocé nuestra política de privacidad.
+      </p>
+      <div id="login-hint" class="login-hint" role="status" aria-live="assertive"></div>
+    </form>
+  </section>
+
+  <div id="app-shell" class="app-shell" hidden>
     <!-- Sidebar: brand identity on top + index of topics the RAG can answer
          about. Persistent across the chat so students can keep it as a
          reference. Stacks below the chat on small screens. -->
-    <aside class="sidebar">
-      <div class="sidebar-brand">
+    <aside id="sidebar" class="sidebar">
+      <button type="button" id="mobile-menu-close" class="mobile-menu-close" aria-label="Cerrar menú">
+        <span aria-hidden="true">×</span>
+      </button>
+      <button type="button" id="home-link" class="sidebar-brand" aria-label="Volver al inicio de FaradAI">
         <img src="/img/logo-icon.svg" alt="" class="brand-icon" aria-hidden="true">
-        <img src="/img/logo-wordmark.svg" alt="FaradAI" class="brand-wordmark">
-      </div>
+        <img src="/img/logo-wordmark.svg" alt="" class="brand-wordmark" aria-hidden="true">
+      </button>
 
-      <a class="dashboard-link" href="/dashboard">Panel de profesores</a>
+      <nav class="sidebar-nav" aria-label="Navegación principal">
+        <a class="dashboard-link" href="/dashboard">Panel de profesores</a>
+        <button type="button" id="about-link" class="about-link">Sobre nosotros</button>
+      </nav>
 
       <section class="topics-index" aria-labelledby="topics-index-title">
         <h2 id="topics-index-title" class="topics-index-title">Temas del curso</h2>
@@ -30,6 +87,11 @@
 
     <!-- Chat column: messages + identification / input areas + footer. -->
     <main class="chat-container">
+      <button type="button" id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidebar">
+        <span aria-hidden="true">☰</span>
+      </button>
+
+      <section id="chat-view" class="chat-view">
       <!-- Visible only when the persistence layer is degraded (Turso
            outage, network blip). Tells students the conversation will not
            survive a reload but they can keep asking. The
@@ -40,19 +102,16 @@
         El historial no está disponible por ahora. Podés seguir preguntando.
       </div>
 
-      <ul id="messages" class="messages" aria-live="polite"></ul>
+      <section id="home-hero" class="home-hero" aria-labelledby="home-greeting">
+        <div class="home-brand" role="img" aria-label="FaradAI">
+          <img src="/img/logo-icon.svg" alt="" class="home-brand-icon" aria-hidden="true">
+          <img src="/img/logo-wordmark.svg" alt="" class="home-brand-wordmark" aria-hidden="true">
+        </div>
+        <h1 id="home-greeting">¡Hola <span id="home-greeting-name" class="home-greeting-name"></span>!</h1>
+        <p>FaradAI es un asistente virtual de física 1 para la Facultad de Cs. Bioquímicas y Farmacéuticas de la UNR. Te va a orientar en el aprendizaje en vez de darte las respuestas directamente. Podés hacer preguntas del contenido de la materia o elegir las preguntas sugeridas de cada unidad del programa.</p>
+      </section>
 
-      <div id="name-area" class="name-area">
-        <input
-          id="student-name"
-          type="text"
-          autocomplete="off"
-          maxlength="100"
-          placeholder="Escribí tu nombre para empezar..."
-          aria-label="Nombre"
-        />
-        <button type="button" id="name-submit">Entrar</button>
-      </div>
+      <ul id="messages" class="messages" aria-live="polite"></ul>
 
       <form id="chat-form" class="input-area">
         <input
@@ -61,15 +120,63 @@
           name="query"
           autocomplete="off"
           maxlength="500"
-          placeholder="Escribí tu pregunta de Física 1..."
+          placeholder="¿Con qué puedo ayudarte?"
           aria-label="Pregunta"
           disabled
         />
-        <button type="submit" id="send-btn" disabled>Enviar</button>
+        <button type="submit" id="send-btn" aria-label="Enviar" disabled><span aria-hidden="true">↑</span></button>
       </form>
 
       <div id="hint" class="hint" role="status" aria-live="assertive"></div>
       <p class="disclaimer">FaradAI puede cometer errores. Comprobá la información en los apuntes de las cátedras.</p>
+      </section>
+
+      <section id="about-view" class="about-view" hidden aria-labelledby="about-title">
+        <div class="about-content">
+          <h1 id="about-title">Sobre <em>FaradAI</em></h1>
+          <p class="about-lead">Es un asistente virtual desarrollado para la Facultad de Ciencias Bioquímicas y Farmacéuticas de la Universidad Nacional de Rosario.</p>
+
+          <section class="about-block about-block-split">
+            <div>
+              <h2>La idea detrás<br class="desktop-only"> del proyecto</h2>
+              <p>Está diseñado para acompañar a los estudiantes del Área Física mientras estudian, orientándolos en la comprensión de conceptos y la resolución de ejercicios, sin reemplazar al docente ni dar respuestas directas.</p>
+            </div>
+          </section>
+
+          <p class="about-statement">Trabaja exclusivamente con el material validado por la cátedra —bibliografía, guías y recursos académicos—.</p>
+
+          <section class="about-block about-centered">
+            <h2>El concepto detrás de FaradAI</h2>
+            <p>Cuando recibe una consulta, no resuelve por el estudiante, sino que orienta mediante preguntas que lo ayudan a identificar sus conocimientos previos y avanzar en su propio razonamiento. Está disponible en cualquier momento, como complemento al horario de cursado.</p>
+          </section>
+
+          <p class="about-statement">Pensado para estudiantes que cursan asignaturas de Física. A futuro, el proyecto busca expandirse a otras áreas y facultades de la UNR.</p>
+
+          <section class="about-block about-centered">
+            <h2>Privacidad y uso de datos</h2>
+            <p>Las conversaciones que se realizan son registradas de forma anónima. Esto significa que las preguntas que hacen los estudiantes se guardan para que el equipo pueda analizar qué temas generan más dudas y mejorar la enseñanza, pero en ningún caso se almacenan datos personales ni información que permita identificar al usuario.</p>
+          </section>
+
+          <section class="about-block about-block-split">
+            <div>
+              <h2>Una herramienta<br class="desktop-only"> con propósito</h2>
+              <p>FaradAI puede orientarte en temas del programa, ayudarte a entender una consigna, acompañarte en el razonamiento de un ejercicio y sugerirte desde dónde partir cuando no sabés por dónde empezar.</p>
+              <p>No puede corregir exámenes, acceder a tu historial académico ni responder consultas fuera del material de la cátedra.</p>
+            </div>
+          </section>
+
+          <section class="about-block credits about-centered">
+            <h2>Créditos</h2>
+            <p>FaradAI es un proyecto académico realizado en el marco de la convocatoria XperienciaUNR, a cargo del Laboratorio de Experimentación Tecnológica (LET UNR) del Área de Ciencia, Tecnología e Innovación de la Universidad Nacional de Rosario. El prototipo es implementado por un grupo interdisciplinario formado por:</p>
+            <p class="credits-list">
+              Nair Sarquis, promotora del proyecto (profesora de física).<br>
+              Tatiana Gangge, gestión (alumna de Comunicación Social).<br>
+              Fabián Alvarez, desarrollo (alumno de la Tecnicatura en Inteligencia Artificial).<br>
+              Justo Iribarren, diseño (alumno de Diseño Gráfico).
+            </p>
+          </section>
+        </div>
+      </section>
     </main>
   </div>
 
