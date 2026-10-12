@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Cómo incorporamos ejercicios al asistente</title>
+  <style>
+    @page { size: A4; margin: 2cm; }
+    body { font-family: Arial, sans-serif; color: #263238; line-height: 1.45; font-size: 11pt; }
+    h1 { color: #16324f; font-size: 25pt; margin-bottom: 8px; }
+    h2 { color: #1f5f75; border-bottom: 1px solid #b7cbd3; padding-bottom: 4px; margin-top: 24px; }
+    h3 { color: #285f6d; margin-top: 18px; }
+    .subtitle { color: #607d8b; font-size: 13pt; margin-bottom: 24px; }
+    .callout { background: #edf6f8; border-left: 5px solid #2d8195; padding: 12px 16px; margin: 16px 0; }
+    .warning { background: #fff8e1; border-left: 5px solid #d69e2e; padding: 12px 16px; margin: 16px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; }
+    th, td { border: 1px solid #c7d2d7; padding: 7px 9px; vertical-align: top; }
+    th { background: #e7f0f3; text-align: left; }
+    code { font-family: Menlo, monospace; font-size: 9pt; background: #f2f4f5; padding: 2px 4px; }
+    pre { background: #f4f6f7; border: 1px solid #d8e0e3; padding: 12px; font-size: 8.5pt; white-space: pre-wrap; }
+    li { margin: 5px 0; }
+    .footer { color: #78909c; font-size: 9pt; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <h1>Cómo incorporamos ejercicios al asistente</h1>
+  <p class="subtitle">Propuesta de trabajo para revisar, cargar y publicar ejercicios de Física 1</p>
+
+  <div class="callout">
+    <strong>Idea principal:</strong> el asistente no resolverá problemas de física arbitrarios.
+    Solo trabajará con ejercicios que estén cargados, revisados y publicados en un catálogo controlado por el equipo.
+  </div>
+
+  <h2>1. ¿Qué problema resolvemos?</h2>
+  <p>
+    Los PDFs del curso contienen mucho material, pero no todo está listo para ser utilizado por el asistente.
+    Un ejercicio puede necesitar una revisión del enunciado, del gráfico, de las unidades, de la respuesta esperada
+    y de la forma pedagógica en que queremos acompañar al estudiante.
+  </p>
+  <p>
+    Por eso distinguimos entre el <strong>corpus académico</strong> (todos los materiales disponibles) y el
+    <strong>catálogo de ejercicios habilitados</strong> (solo los ejercicios aprobados para estudiantes).
+  </p>
+
+  <h2>2. Proceso para incorporar un ejercicio</h2>
+  <ol>
+    <li><strong>Seleccionar:</strong> elegir un ejercicio concreto de una guía o PDF.</li>
+    <li><strong>Describir:</strong> registrar su fuente, página, enunciado, gráfico y conceptos involucrados.</li>
+    <li><strong>Revisar:</strong> verificar que el texto y los datos sean correctos y que el ejercicio esté bien delimitado.</li>
+    <li><strong>Preparar:</strong> definir qué debería poder acompañar el asistente y qué recursos visuales necesita.</li>
+    <li><strong>Validar:</strong> revisar ejemplos de respuestas y confirmar que respete el enfoque socrático.</li>
+    <li><strong>Publicar:</strong> recién entonces el ejercicio aparece disponible para estudiantes.</li>
+  </ol>
+
+  <h2>3. Estados de cada ejercicio</h2>
+  <table>
+    <tr><th>Estado</th><th>Significado</th><th>¿Lo ve el estudiante?</th></tr>
+    <tr><td><code>draft</code></td><td>Está cargado, pero todavía se está preparando.</td><td>No</td></tr>
+    <tr><td><code>validated</code></td><td>Fue revisado técnicamente y académicamente.</td><td>No necesariamente</td></tr>
+    <tr><td><code>published</code></td><td>Está aprobado para trabajar con estudiantes.</td><td>Sí</td></tr>
+    <tr><td><code>archived</code></td><td>Se retiró del catálogo, pero conservamos su registro.</td><td>No</td></tr>
+  </table>
+
+  <h2>4. Ficha de configuración</h2>
+  <p>Cada ejercicio tendrá una ficha similar a esta:</p>
+  <pre>id: cinematica-1d-ejercicio-02
+status: published
+
+title: "Movimiento representado por una parábola"
+unit: "Cinemática en 1D"
+
+source:
+  file: "Fisica1-Cuadernillo-2026.pdf"
+  page: 29
+
+statement: "Texto controlado del enunciado"
+
+concepts:
+  - position
+  - velocity
+  - acceleration
+
+assets:
+  - "cinematica-1d-ejercicio-02-x-t.svg"
+
+validation:
+  reviewed_by: "Equipo de Física 1"
+  expected_outputs:
+    - "initial_velocity"
+    - "acceleration"
+    - "position_equation"
+    - "velocity_graph"
+    - "acceleration_graph"</pre>
+
+  <h2>5. ¿Cómo interactúa el estudiante?</h2>
+  <ol>
+    <li>El estudiante ve una lista de ejercicios publicados.</li>
+    <li>Selecciona un ejercicio.</li>
+    <li>El asistente muestra el enunciado y el material correspondiente.</li>
+    <li>Las preguntas del estudiante se responden dentro del contexto de ese ejercicio.</li>
+  </ol>
+
+  <div class="warning">
+    <strong>Importante:</strong> ocultar ejercicios en la pantalla no es suficiente.
+    El sistema también debe verificar internamente que cada consulta tenga un ejercicio válido y recuperar únicamente
+    la información asociada a ese ejercicio.
+  </div>
+
+  <h2>6. Contrato de reintento al guardar una respuesta</h2>
+  <p>
+    El botón <strong>Confirmar respuesta</strong> envía un <code>POST</code> a
+    <code>/api/exercises/{exercise_id}/checkpoint</code>. Antes de validar o avanzar el checkpoint, el servidor lee el
+    progreso canónico del estudiante. Si esa lectura temporalmente no está disponible, responde con <code>HTTP 503</code>
+    y este cuerpo JSON:
+  </p>
+  <pre>{
+  "detail": {
+    "code": "exercise_progress_unavailable",
+    "message": "No se pudo leer tu progreso. No se generó una nueva guía. Reintentá.",
+    "retryable": true
+  }
+}</pre>
+  <p>
+    <code>retryable: true</code> significa que la respuesta puede repetirse más adelante, pero que ese intento no avanzó el
+    ejercicio ni debe generar una nueva guía. La interfaz muestra el mensaje, oculta temporalmente el checkpoint y desactiva
+    el chat para evitar acciones sobre un estado que no pudo confirmarse. Al elegir <strong>Reintentar cargar el progreso</strong>,
+    primero vuelve a consultar el progreso canónico mediante <code>GET /api/exercises/{exercise_id}/progress</code>. Solo si esa
+    lectura tiene éxito vuelve a mostrar el checkpoint y permite enviar la respuesta nuevamente.
+  </p>
+
+  <h2>7. ¿Qué ocurre si pregunta por otro problema?</h2>
+  <p>El asistente debe responder de forma clara y honesta:</p>
+  <div class="callout">
+    “Todavía no tengo cargado ese ejercicio. Puedo ayudarte únicamente con el ejercicio seleccionado de Cinemática en 1D.”
+  </div>
+  <p>
+    Esto evita que el modelo improvise una solución basada en conocimientos generales o en un ejercicio que todavía no revisamos.
+  </p>
+
+  <h2>8. Primer ejercicio propuesto</h2>
+  <table>
+    <tr><th>Campo</th><th>Información</th></tr>
+    <tr><td>Unidad</td><td>Cinemática de la partícula en 1D</td></tr>
+    <tr><td>Ejercicio</td><td>N.º 2</td></tr>
+    <tr><td>Fuente</td><td>Fisica1-Cuadernillo-2026.pdf, página impresa 25 / página PDF aproximada 29</td></tr>
+    <tr><td>Contenido</td><td>Análisis de un gráfico de posición en función del tiempo y construcción de v(t) y a(t).</td></tr>
+    <tr><td>Por qué empezar aquí</td><td>Tiene un gráfico identificable, objetivos concretos y permite evaluar tanto el razonamiento como las visualizaciones.</td></tr>
+  </table>
+
+  <h2>9. Criterio para sumar nuevos ejercicios</h2>
+  <ul>
+    <li>Agregar pocos ejercicios por vez.</li>
+    <li>Revisar cada uno antes de publicarlo.</li>
+    <li>Conservar la fuente original y la página de referencia.</li>
+    <li>Definir qué conceptos y resultados esperamos que el asistente pueda acompañar.</li>
+    <li>Probar preguntas correctas, preguntas ambiguas y preguntas fuera del ejercicio.</li>
+    <li>Publicar solo cuando la respuesta sea pedagógicamente aceptable.</li>
+  </ul>
+
+  <h2>10. Próximo paso</h2>
+  <p>
+    Comenzaremos con el ejercicio 2: prepararemos su ficha, aislaremos su material en la base de conocimiento,
+    validaremos la interacción y recién después lo dejaremos visible en el asistente.
+    El mismo procedimiento se repetirá para cada ejercicio nuevo.
+  </p>
+
+  <p class="footer">Asistente de Física · Propuesta de incorporación progresiva de ejercicios</p>
+</body>
+</html>

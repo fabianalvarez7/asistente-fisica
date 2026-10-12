@@ -1,0 +1,443 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 8 0 R 12 0 R 16 0 R] /Count 4 >>
+endobj
+3 0 obj
+<< /Length 1988 >>
+stream
+q
+0.15 0.25 0.31 rg
+BT
+/F2 22 Tf
+1 0 0 1 58 782 Tm
+(Cómo incorporamos ejercicios al asistente)
+Tj
+0.35 0.48 0.54 rg
+/F1 11 Tf
+1 0 0 1 58 748 Tm
+(Propuesta de trabajo para Física 1)
+Tj
+0.15 0.25 0.31 rg
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 712 Tm
+(Idea principal)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 690 Tm
+(El asistente no resolverá problemas de física arbitrarios. Solo trabajará con ejercicios)
+Tj
+/F1 10 Tf
+1 0 0 1 58 676 Tm
+(cargados, revisados y publicados en un catálogo controlado por el equipo.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 650 Tm
+(1. ¿Qué problema resolvemos?)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 628 Tm
+(Los PDFs contienen mucho material, pero no todo está listo para ser utilizado. Cada)
+Tj
+/F1 10 Tf
+1 0 0 1 58 614 Tm
+(ejercicio puede necesitar una revisión del enunciado, del gráfico, de las unidades, de la)
+Tj
+/F1 10 Tf
+1 0 0 1 58 600 Tm
+(respuesta esperada y de la forma pedagógica de acompañar al estudiante.)
+Tj
+/F1 10 Tf
+1 0 0 1 58 582 Tm
+(Por eso distinguimos entre el corpus académico, que reúne todos los materiales disponibles,)
+Tj
+/F1 10 Tf
+1 0 0 1 58 568 Tm
+(y el catálogo de ejercicios habilitados, que contiene únicamente los ejercicios aprobados)
+Tj
+/F1 10 Tf
+1 0 0 1 58 554 Tm
+(para estudiantes.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 528 Tm
+(2. Proceso para incorporar un ejercicio)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 72 506 Tm
+(• Seleccionar: elegir un ejercicio concreto de una guía o PDF.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 488 Tm
+(• Describir: registrar fuente, página, enunciado, gráfico y conceptos.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 470 Tm
+(• Revisar: verificar texto, datos, unidades y límites del ejercicio.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 452 Tm
+(• Preparar: definir qué debe acompañar el asistente y qué recursos necesita.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 434 Tm
+(• Validar: revisar respuestas y confirmar el enfoque socrático.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 416 Tm
+(• Publicar: habilitarlo para estudiantes únicamente después de la revisión.)
+Tj
+ET
+Q
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+7 0 obj
+<< /Length 1691 >>
+stream
+q
+0.15 0.25 0.31 rg
+BT
+/F2 22 Tf
+1 0 0 1 58 782 Tm
+(Estados y ficha del ejercicio)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 740 Tm
+(3. Estados de cada ejercicio)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 718 Tm
+(draft: cargado, pero todavía en preparación. validated: revisado técnica y académicamente.)
+Tj
+/F1 10 Tf
+1 0 0 1 58 704 Tm
+(published: aprobado para estudiantes. archived: retirado del catálogo, conservando su)
+Tj
+/F1 10 Tf
+1 0 0 1 58 690 Tm
+(registro.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 664 Tm
+(4. Ficha de configuración)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 642 Tm
+(Cada ejercicio tendrá una ficha similar a esta:)
+Tj
+/F1 9 Tf
+1 0 0 1 58 624 Tm
+(id: cinematica-1d-ejercicio-02)
+Tj
+/F1 9 Tf
+1 0 0 1 58 606 Tm
+(status: published)
+Tj
+/F1 9 Tf
+1 0 0 1 58 588 Tm
+(title: Movimiento representado por una parábola)
+Tj
+/F1 9 Tf
+1 0 0 1 58 570 Tm
+(unit: Cinemática en 1D)
+Tj
+/F1 9 Tf
+1 0 0 1 58 552 Tm
+(source: Fisica1-Cuadernillo-2026.pdf, page 29)
+Tj
+/F1 9 Tf
+1 0 0 1 58 534 Tm
+(statement: Texto controlado del enunciado)
+Tj
+/F1 9 Tf
+1 0 0 1 58 516 Tm
+(concepts: position, velocity, acceleration)
+Tj
+/F1 9 Tf
+1 0 0 1 58 498 Tm
+(assets: cinematica-1d-ejercicio-02-x-t.svg)
+Tj
+/F1 9 Tf
+1 0 0 1 58 480 Tm
+(validation: revisado por el equipo de Física 1)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 454 Tm
+(5. ¿Cómo interactúa el estudiante?)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 72 432 Tm
+(• Ve una lista de ejercicios publicados.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 414 Tm
+(• Selecciona un ejercicio.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 396 Tm
+(• Recibe el enunciado y el material correspondiente.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 378 Tm
+(• Hace preguntas dentro del contexto de ese ejercicio.)
+Tj
+ET
+Q
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 8 0 R /F2 9 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+11 0 obj
+<< /Length 2323 >>
+stream
+q
+0.15 0.25 0.31 rg
+BT
+/F2 22 Tf
+1 0 0 1 58 782 Tm
+(Control del alcance)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 740 Tm
+(Una protección importante)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 718 Tm
+(Ocultar ejercicios en la pantalla no es suficiente. El sistema también debe verificar)
+Tj
+/F1 10 Tf
+1 0 0 1 58 704 Tm
+(internamente que cada consulta tenga un ejercicio válido y recuperar únicamente la)
+Tj
+/F1 10 Tf
+1 0 0 1 58 690 Tm
+(información asociada a ese ejercicio.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 664 Tm
+(6. ¿Qué ocurre si pregunta por otro problema?)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 642 Tm
+(El asistente debe responder de forma clara y honesta:)
+Tj
+/F1 10 Tf
+1 0 0 1 58 624 Tm
+(Todavía no tengo cargado ese ejercicio. Puedo ayudarte únicamente con el ejercicio)
+Tj
+/F1 10 Tf
+1 0 0 1 58 610 Tm
+(seleccionado de Cinemática en 1D.)
+Tj
+/F1 10 Tf
+1 0 0 1 58 592 Tm
+(Esto evita que el modelo improvise una solución basada en conocimientos generales o en un)
+Tj
+/F1 10 Tf
+1 0 0 1 58 578 Tm
+(ejercicio que todavía no revisamos.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 552 Tm
+(7. Primer ejercicio propuesto)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 530 Tm
+(Unidad: Cinemática de la partícula en 1D. Ejercicio: número 2. Fuente:)
+Tj
+/F1 10 Tf
+1 0 0 1 58 516 Tm
+(Fisica1-Cuadernillo-2026.pdf, página impresa 25 / página PDF aproximada 29. Contenido:)
+Tj
+/F1 10 Tf
+1 0 0 1 58 502 Tm
+(análisis de un gráfico de posición en función del tiempo y construcción de v\(t\) y a\(t\).)
+Tj
+/F1 10 Tf
+1 0 0 1 58 484 Tm
+(Es un buen primer ejercicio porque tiene un gráfico identificable, objetivos concretos y)
+Tj
+/F1 10 Tf
+1 0 0 1 58 470 Tm
+(permite evaluar tanto el razonamiento como las visualizaciones.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 444 Tm
+(8. Criterio para sumar nuevos ejercicios)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 72 422 Tm
+(• Agregar pocos ejercicios por vez.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 404 Tm
+(• Revisar cada uno antes de publicarlo.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 386 Tm
+(• Conservar la fuente original y la página.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 368 Tm
+(• Definir conceptos y resultados esperados.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 350 Tm
+(• Probar preguntas correctas, ambiguas y fuera de alcance.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 332 Tm
+(• Publicar solo cuando la respuesta sea pedagógicamente aceptable.)
+Tj
+ET
+Q
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 12 0 R /F2 13 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+14 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+15 0 obj
+<< /Length 1255 >>
+stream
+q
+0.15 0.25 0.31 rg
+BT
+/F2 22 Tf
+1 0 0 1 58 782 Tm
+(Próximo paso)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 740 Tm
+(9. Empezar con el ejercicio 2)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 58 718 Tm
+(Prepararemos su ficha, aislaremos su material en la base de conocimiento, validaremos la)
+Tj
+/F1 10 Tf
+1 0 0 1 58 704 Tm
+(interacción y recién después lo dejaremos visible en el asistente.)
+Tj
+/F1 10 Tf
+1 0 0 1 58 686 Tm
+(El mismo procedimiento se repetirá para cada ejercicio nuevo. Así podremos ampliar el)
+Tj
+/F1 10 Tf
+1 0 0 1 58 672 Tm
+(catálogo de forma gradual, revisable y segura.)
+Tj
+0.12 0.37 0.46 rg
+/F2 14 Tf
+1 0 0 1 58 646 Tm
+(Resumen para el equipo)
+Tj
+0.15 0.25 0.31 rg
+/F1 10 Tf
+1 0 0 1 72 624 Tm
+(• Un ejercicio no se publica automáticamente por estar presente en un PDF.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 606 Tm
+(• Cada ejercicio tiene una ficha, un estado y una fuente verificable.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 588 Tm
+(• El asistente trabaja dentro del ejercicio seleccionado.)
+Tj
+/F1 10 Tf
+1 0 0 1 72 570 Tm
+(• Las consultas fuera del catálogo reciben una respuesta de límite, no una)
+Tj
+/F1 10 Tf
+1 0 0 1 72 556 Tm
+(solución inventada.)
+Tj
+/F1 10 Tf
+1 0 0 1 58 538 Tm
+(Asistente de Física · Propuesta de incorporación progresiva de ejercicios)
+Tj
+ET
+Q
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 16 0 R /F2 17 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+18 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 19
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000135 00000 n 
+0000002175 00000 n 
+0000002311 00000 n 
+0000002381 00000 n 
+0000002456 00000 n 
+0000004199 00000 n 
+0000004335 00000 n 
+0000004405 00000 n 
+0000004481 00000 n 
+0000006857 00000 n 
+0000006997 00000 n 
+0000007068 00000 n 
+0000007144 00000 n 
+0000008452 00000 n 
+0000008592 00000 n 
+0000008663 00000 n 
+trailer
+<< /Size 19 /Root 1 0 R >>
+startxref
+8739
+%%EOF
