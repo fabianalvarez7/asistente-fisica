@@ -229,12 +229,28 @@ def connect(_url, auth_token=None):
                         student_id,
                         timeout=1,
                     )
+                    await history_async.bounded_call(
+                        history.save_message,
+                        student_id,
+                        "assistant",
+                        "exercise turn",
+                        "cinematica-1d-ejercicio-02",
+                        timeout=1,
+                    )
+                    exercise_messages = await history_async.bounded_call(
+                        history.get_history,
+                        student_id,
+                        None,
+                        "cinematica-1d-ejercicio-02",
+                        timeout=1,
+                    )
             finally:
                 history._reset_connection()
 
             self.assertEqual(message_id, messages[0]["id"])
             self.assertEqual(messages[0]["content"], "test")
             self.assertEqual(messages[0]["role"], "user")
+            self.assertEqual([item["content"] for item in exercise_messages], ["exercise turn"])
 
 
 if __name__ == "__main__":

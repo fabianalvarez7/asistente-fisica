@@ -33,7 +33,8 @@ with patch.object(history_module, "init_db"):
     from app.main import ERROR_FALLBACK, _log_history_failure, app  # noqa: E402
 
 
-def _fake_generator(query, history=None):
+def _fake_generator(query, history=None, *, exercise=None):
+    del exercise
     yield "data: Pensá en esto...\n\n"
     yield "data: [DONE]\n\n"
 
@@ -105,7 +106,7 @@ class ChatSseMessageIdTests(unittest.TestCase):
         self.assertIn("data: Pensá en esto...\n\n", body)
         self.assertIn("data: [DONE]\n\n", body)
         self.assertNotIn("event: user_message_id", body)
-        generator.assert_called_once_with("test", history=[])
+        generator.assert_called_once_with("test", history=[], exercise=None)
         mock_save.assert_not_called()
         mock_history.assert_not_called()
 
@@ -131,7 +132,7 @@ class ChatSseMessageIdTests(unittest.TestCase):
         self.assertIn("data: [DONE]\n\n", body)
         self.assertNotIn("event: user_message_id", body)
         self.assertIn("event: assistant_message_id\ndata: 202\n\n", body)
-        generator.assert_called_once_with("test", history=[])
+        generator.assert_called_once_with("test", history=[], exercise=None)
 
     def test_chat_uses_empty_history_when_history_read_fails(self):
         generator = MagicMock(side_effect=_fake_generator)
@@ -148,7 +149,7 @@ class ChatSseMessageIdTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("data: Pensá en esto...\n\n", response.text)
-        generator.assert_called_once_with("test", history=[])
+        generator.assert_called_once_with("test", history=[], exercise=None)
 
     def test_assistant_output_survives_persistence_failure(self):
         with (
@@ -399,7 +400,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
         self.assertNotIn(str(cause), rendered_log)
 
     def test_yielded_generation_error_persists_fallback_once_in_sse_order(self):
-        def yielded_error_generator(query, history=None):
+        def yielded_error_generator(query, history=None, *, exercise=None):
+            del exercise
             yield "data: Respuesta parcial\n\n"
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
             yield "data: [DONE]\n\n"
@@ -434,7 +436,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
     def test_distinct_yielded_error_is_forwarded_after_persisted_fallback(self):
         distinct_error = "Fallo específico del generador"
 
-        def yielded_error_generator(query, history=None):
+        def yielded_error_generator(query, history=None, *, exercise=None):
+            del exercise
             yield f"event: error\ndata: {distinct_error}\n\n"
             yield "data: [DONE]\n\n"
 
@@ -468,7 +471,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
     def test_yielded_error_then_raise_persists_fallback_at_most_once(self):
         distinct_error = "Fallo específico antes de excepción"
 
-        def yielded_error_then_raise(query, history=None):
+        def yielded_error_then_raise(query, history=None, *, exercise=None):
+            del exercise
             yield f"event: error\ndata: {distinct_error}\n\n"
             raise RuntimeError("generation failed after yielded error")
 
@@ -503,7 +507,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
         )
 
     def test_yielded_generation_error_survives_fallback_persistence_failure(self):
-        def yielded_error_generator(query, history=None):
+        def yielded_error_generator(query, history=None, *, exercise=None):
+            del exercise
             yield "data: Respuesta parcial\n\n"
             yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
             yield "data: [DONE]\n\n"
@@ -541,7 +546,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
         )
 
     def test_generation_failure_before_first_token_terminates_after_fallback(self):
-        def failing_generator(query, history=None):
+        def failing_generator(query, history=None, *, exercise=None):
+            del exercise
             raise RuntimeError("generation failed")
             yield  # pragma: no cover - makes this a generator
 
@@ -567,7 +573,8 @@ class ChatSseMessageIdTests(unittest.TestCase):
         )
 
     def test_mid_stream_generation_failure_terminates_after_fallback(self):
-        def failing_generator(query, history=None):
+        def failing_generator(query, history=None, *, exercise=None):
+            del exercise
             yield "data: Respuesta parcial\n\n"
             raise RuntimeError("generation failed")
 

@@ -43,7 +43,8 @@ with _temporary_retrievers_module():
     from rag.history import HistoryUnavailableError  # noqa: E402
 
 
-def _fake_generator(query, history=None):
+def _fake_generator(query, history=None, *, exercise=None, checkpoint_index=0):
+    del exercise, checkpoint_index
     yield "data: Pensá en esto...\n\n"
     yield "data: [DONE]\n\n"
 
@@ -104,15 +105,22 @@ def _fake_turso_get_or_create_student(name):
     return 1
 
 
-def _fake_turso_get_history(student_id, limit=None):
-    del student_id, limit
+def _fake_turso_get_history(student_id, limit=None, exercise_id=None):
+    del student_id, limit, exercise_id
     _record_fake_turso_event("history")
     return []
 
 
-def _fake_turso_save_message(student_id, role, content):
+def _fake_turso_get_exercise_progress(student_id, exercise_id):
+    del student_id, exercise_id
+    _record_fake_turso_event("exercise-progress")
+    return 0
+
+
+def _fake_turso_save_message(student_id, role, content, exercise_id=None):
     del student_id
-    event_number = _record_fake_turso_event(f"save:{role}:{content}")
+    scope = exercise_id or "theory"
+    event_number = _record_fake_turso_event(f"save:{role}:{content}:{scope}")
     return event_number
 
 
@@ -159,6 +167,9 @@ class RemoteHistoryApplicationIntegrationTests(unittest.TestCase):
                     main, "get_or_create_student", _fake_turso_get_or_create_student
                 ),
                 patch.object(main, "get_history", _fake_turso_get_history),
+                patch.object(
+                    main, "get_exercise_progress", _fake_turso_get_exercise_progress
+                ),
                 patch.object(main, "save_message", _fake_turso_save_message),
                 patch.object(main, "generate_response", _fake_generator),
             ):
@@ -178,6 +189,43 @@ class RemoteHistoryApplicationIntegrationTests(unittest.TestCase):
             if event.startswith("save:")
         ]
         self.assertEqual(roles, ["user", "assistant"])
+
+    def test_exercise_chat_preserves_scope_through_remote_write_boundary(self):
+        exercise_id = "cinematica-1d-ejercicio-02"
+        with _fake_turso_environment() as events_path:
+            with (
+                patch.object(main, "HISTORY_TIMEOUT_SECONDS", 2),
+                patch.object(main, "init_db", _fake_turso_init_db),
+                patch.object(
+                    main, "get_or_create_student", _fake_turso_get_or_create_student
+                ),
+                patch.object(main, "get_history", _fake_turso_get_history),
+                patch.object(
+                    main, "get_exercise_progress", _fake_turso_get_exercise_progress
+                ),
+                patch.object(main, "save_message", _fake_turso_save_message),
+                patch.object(main, "generate_response", _fake_generator),
+            ):
+                with TestClient(main.app) as client:
+                    response = client.post(
+                        "/chat",
+                        json={
+                            "query": "test",
+                            "student_name": "Ana",
+                            "exercise_id": exercise_id,
+                        },
+                    )
+                events = events_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(response.status_code, 200)
+        saves = [event for event in events if event.startswith("save:")]
+        self.assertEqual(
+            saves,
+            [
+                f"save:user:test:{exercise_id}",
+                f"save:assistant:Pensá en esto...:{exercise_id}",
+            ],
+        )
 
 
 class RemoteHistoryCallableTests(unittest.TestCase):

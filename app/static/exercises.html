@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ejercicios | FaradAI</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="login-screen" class="login-screen" aria-labelledby="login-title">
+    <div class="login-brand" role="img" aria-label="FaradAI">
+      <img src="/img/logo-icon.svg" alt="" class="login-brand-icon" aria-hidden="true">
+      <img src="/img/logo-wordmark.svg" alt="" class="login-brand-wordmark" aria-hidden="true">
+    </div>
+    <p class="login-subtitle">
+      <span>Ejercicios de Física 1</span>
+      <span>Universidad Nacional de Rosario</span>
+    </p>
+
+    <form id="name-area" class="login-card" autocomplete="off">
+      <h1 id="login-title">Iniciar sesión</h1>
+      <input
+        id="student-name"
+        type="text"
+        name="student_name"
+        autocomplete="off"
+        autocapitalize="words"
+        spellcheck="false"
+        inputmode="text"
+        maxlength="100"
+        placeholder="Ingresá tu nombre"
+        aria-label="Nombre"
+      />
+      <button type="submit" id="name-submit">Continuar</button>
+      <div id="login-hint" class="login-hint" role="status" aria-live="assertive"></div>
+    </form>
+  </section>
+
+  <div id="app-shell" class="app-shell" hidden>
+    <aside id="sidebar" class="sidebar">
+      <button type="button" id="mobile-menu-close" class="mobile-menu-close" aria-label="Cerrar menú">
+        <span aria-hidden="true">×</span>
+      </button>
+      <a class="sidebar-brand" href="/" aria-label="Volver al inicio de FaradAI">
+        <img src="/img/logo-icon.svg" alt="" class="brand-icon" aria-hidden="true">
+        <img src="/img/logo-wordmark.svg" alt="" class="brand-wordmark" aria-hidden="true">
+      </a>
+      <nav class="sidebar-nav" aria-label="Navegación principal">
+        <a class="dashboard-link" href="/dashboard">Panel de profesores</a>
+        <a class="about-link" href="/">Sobre nosotros</a>
+        <a class="exercises-link" href="/exercises" aria-current="page">Ejercicios</a>
+      </nav>
+      <section class="topics-index" aria-labelledby="topics-index-title">
+        <h2 id="topics-index-title" class="topics-index-title">Ejercicios publicados</h2>
+        <div id="exercise-list" class="exercise-list" aria-label="Ejercicios publicados"></div>
+      </section>
+    </aside>
+
+    <main class="chat-container exercise-container">
+      <button type="button" id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidebar">
+        <span aria-hidden="true">☰</span>
+      </button>
+
+      <section class="exercise-page" aria-labelledby="exercise-title">
+        <div id="exercise-status" class="exercise-status" role="status" aria-live="polite"></div>
+        <button type="button" id="exercise-retry" class="checkpoint-secondary exercise-retry" hidden>
+          Reintentar cargar el progreso
+        </button>
+        <article class="exercise-statement-card">
+          <h1 id="exercise-title">Cargando ejercicio...</h1>
+          <h2>Enunciado original</h2>
+          <p id="exercise-statement" class="exercise-statement"></p>
+          <img id="exercise-graph" class="exercise-graph" alt="Gráfico original de posición x en función del tiempo t" hidden>
+        </article>
+
+        <details class="exercise-starter">
+          <summary id="starter-title">Ayuda general para empezar (opcional)</summary>
+          <p>Antes de escribir, ubicá estas pistas iniciales:</p>
+          <ul id="starter-ideas"></ul>
+        </details>
+
+        <section id="checkpoint-panel" class="checkpoint-panel" aria-labelledby="checkpoint-prompt">
+          <div class="checkpoint-heading">
+            <p id="checkpoint-progress" class="checkpoint-progress">Checkpoint 1 de 8</p>
+             <div class="progress-track" aria-hidden="true">
+               <span id="progress-bar" class="progress-bar"></span>
+             </div>
+            </div>
+            <p id="checkpoint-part" class="checkpoint-part">Parte a</p>
+            <h2 id="checkpoint-prompt">Cargando tu próximo paso...</h2>
+           <p class="checkpoint-instruction">
+             Cuando el checkpoint te pida un gráfico, dibujalo primero en el cuadernillo y después respondé la pregunta de verificación en la pantalla.
+           </p>
+           <div id="checkpoint-options" class="checkpoint-options" role="group" aria-label="Opciones de respuesta"></div>
+          <div id="checkpoint-feedback" class="checkpoint-feedback" role="status" aria-live="polite" hidden></div>
+          <div class="checkpoint-actions">
+            <button type="button" id="checkpoint-submit" class="checkpoint-submit" disabled>Confirmar respuesta</button>
+            <button type="button" id="checkpoint-hint" class="checkpoint-secondary">Pedir una pista</button>
+            <button type="button" id="checkpoint-help" class="checkpoint-secondary">No sé, necesito ayuda</button>
+           </div>
+         </section>
+
+        <section id="exercise-review" class="exercise-review" aria-labelledby="exercise-review-title" hidden>
+          <h2 id="exercise-review-title">Repaso de respuestas</h2>
+           <ol id="exercise-review-list" class="exercise-review-list"></ol>
+        </section>
+
+        <div id="history-banner" class="history-banner" role="status" aria-live="polite" hidden>
+          El historial no está disponible por ahora. Podés seguir preguntando.
+        </div>
+        <ul id="messages" class="messages exercise-messages" aria-live="polite"></ul>
+        <form id="chat-form" class="input-area exercise-input-area">
+          <input
+            id="query"
+            type="text"
+            name="query"
+            autocomplete="off"
+            maxlength="500"
+            placeholder="Podés escribir una observación"
+            aria-label="Pregunta sobre el ejercicio"
+            enterkeyhint="send"
+            disabled
+          />
+          <button type="submit" id="send-btn" aria-label="Enviar" disabled><span aria-hidden="true">↑</span></button>
+        </form>
+        <div id="hint" class="hint" role="status" aria-live="assertive"></div>
+        <p class="disclaimer">FaradAI puede cometer errores. Comprobá la información en los apuntes de las cátedras.</p>
+      </section>
+    </main>
+  </div>
+
+  <script defer src="/exercise.js"></script>
+</body>
+</html>

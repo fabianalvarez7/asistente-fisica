@@ -258,7 +258,8 @@ a {
 }
 
 .dashboard-link,
-.about-link {
+.about-link,
+.exercises-link {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -270,7 +271,8 @@ a {
   font-size: var(--font-size-sm);
 }
 
-.about-link {
+.about-link,
+.exercises-link {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background-color: var(--color-surface-alt);
@@ -283,12 +285,19 @@ a {
   color: var(--color-text);
 }
 
+.exercises-link:hover {
+  background-color: var(--color-brand-primary-hover);
+  color: var(--color-text);
+}
+
 .dashboard-link:focus-visible,
 .sidebar-brand:focus-visible,
 .about-link:focus-visible,
+.exercises-link:focus-visible,
 .mobile-menu-toggle:focus-visible,
 .topic-group-header:focus-visible,
-.topic-prompt:focus-visible {
+.topic-prompt:focus-visible,
+.exercise-list-item:focus-visible {
   outline: 3px solid var(--color-brand-primary-soft);
   outline-offset: 2px;
 }
@@ -365,6 +374,33 @@ a {
 
 .topic-prompt--draft {
   font-style: italic;
+}
+
+.exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.exercise-list-item {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.exercise-list-item:hover,
+.exercise-list-item[aria-pressed="true"] {
+  background-color: var(--color-surface-alt);
+  color: var(--color-text);
 }
 
 .topic-prompts > p {
@@ -593,6 +629,367 @@ a {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   text-align: center;
+}
+
+/* -------------------------------------------------------------------------
+ * Dedicated exercise experience
+ * ------------------------------------------------------------------------- */
+
+.exercise-page {
+  width: min(100%, 64rem);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 4rem) clamp(1rem, 5vw, 4rem) 2rem;
+}
+
+.exercise-status {
+  min-height: 1.25rem;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
+.exercise-retry {
+  align-self: flex-start;
+  margin-top: var(--space-sm);
+}
+
+.exercise-statement-card,
+.exercise-starter {
+  padding: var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-alt);
+}
+
+.exercise-statement-card h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+}
+
+.exercise-statement-card h2,
+.exercise-starter h2 {
+  margin: var(--space-xl) 0 var(--space-sm);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.exercise-statement {
+  margin: 0;
+  white-space: pre-line;
+  line-height: var(--line-height-base);
+}
+
+.exercise-graph {
+  display: block;
+  width: min(100%, 34rem);
+  height: auto;
+  margin: var(--space-xl) auto 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.exercise-starter {
+  margin-top: var(--space-lg);
+}
+
+.exercise-starter p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.exercise-starter summary {
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.exercise-starter[open] summary {
+  margin-bottom: var(--space-sm);
+}
+
+.exercise-starter ul {
+  display: grid;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0 0;
+  padding-left: 1.25rem;
+}
+
+.checkpoint-panel {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  border: 2px solid var(--color-brand-primary-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.checkpoint-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.checkpoint-progress {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.checkpoint-part {
+  margin: var(--space-lg) 0 0;
+  color: var(--color-brand-primary-strong);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.progress-track {
+  flex: 1;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+}
+
+.progress-bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand-primary);
+  transition: width 160ms ease;
+}
+
+.checkpoint-panel h2 {
+  margin: var(--space-lg) 0;
+  font-size: clamp(1.125rem, 2.5vw, 1.5rem);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+}
+
+.checkpoint-instruction {
+  margin: calc(var(--space-lg) * -0.5) 0 var(--space-lg);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-base);
+}
+
+.checkpoint-options {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.checkpoint-option,
+.checkpoint-submit,
+.checkpoint-secondary {
+  min-height: 3.25rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font: inherit;
+  line-height: var(--line-height-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkpoint-option:hover:not(:disabled),
+.checkpoint-secondary:hover:not(:disabled) {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary-hover);
+}
+
+.checkpoint-option.is-selected {
+  border-color: var(--color-brand-primary-strong);
+  background: var(--color-brand-primary-hover);
+  box-shadow: 0 0 0 3px var(--color-brand-primary-soft);
+  font-weight: var(--font-weight-semibold);
+}
+
+.checkpoint-option--graph {
+  display: flex;
+  min-height: 11rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  text-align: center;
+}
+
+.checkpoint-graph {
+  display: block;
+  width: 100%;
+  max-width: 17rem;
+}
+
+.checkpoint-graph-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.checkpoint-graph-grid line {
+  stroke: var(--color-border);
+  stroke-width: 0.7;
+  opacity: 0.65;
+}
+
+.checkpoint-graph-axes line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+}
+
+.checkpoint-graph-line {
+  fill: none;
+  stroke: var(--color-brand-primary-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.checkpoint-graph-label,
+.checkpoint-graph-axis-label {
+  fill: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.checkpoint-graph-option-label {
+  font-weight: var(--font-weight-semibold);
+}
+
+.checkpoint-option:disabled,
+.checkpoint-submit:disabled,
+.checkpoint-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.checkpoint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.checkpoint-submit {
+  flex: 1 1 12rem;
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary-hover);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+}
+
+.checkpoint-submit:hover:not(:disabled) {
+  background: var(--color-brand-primary-soft);
+}
+
+.checkpoint-secondary {
+  flex: 1 1 10rem;
+  min-height: 2.75rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.checkpoint-feedback {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+}
+
+.checkpoint-feedback--correct {
+  border-left: 4px solid var(--color-brand-primary-strong);
+}
+
+.checkpoint-feedback--incorrect,
+.checkpoint-feedback--partially_correct,
+.checkpoint-feedback--unknown {
+  border-left: 4px solid var(--color-error);
+}
+
+.exercise-messages {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.exercise-input-area {
+  width: 100%;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.exercise-review {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-alt);
+}
+
+.exercise-review h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.exercise-review-list {
+  display: grid;
+  gap: var(--space-md);
+  margin: var(--space-lg) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exercise-review-turn {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.exercise-review-turn--user {
+  border-left: 4px solid var(--color-brand-primary);
+}
+
+.exercise-review-turn--assistant {
+  border-left: 4px solid var(--color-border);
+}
+
+.exercise-review-role {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.exercise-review-turn p {
+  margin: var(--space-xs) 0 0;
+  white-space: pre-wrap;
+}
+
+.exercise-review-item {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.exercise-review-question {
+  margin: 0 0 var(--space-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.exercise-review-answers {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-lg);
+}
+
+.exercise-review-empty {
+  color: var(--color-text-muted);
 }
 
 /* -------------------------------------------------------------------------
@@ -831,6 +1228,25 @@ a {
     padding-right: 0.75rem;
     padding-left: 0.75rem;
     font-size: 0.75rem;
+  }
+
+  .exercise-page {
+    padding: 1.5rem 1rem 1rem;
+  }
+
+  .exercise-statement-card,
+  .exercise-starter {
+    padding: var(--space-md);
+  }
+
+  .exercise-statement-card h1 {
+    font-size: 1.5rem;
+  }
+
+  .exercise-input-area {
+    flex-wrap: wrap;
+    padding-right: 0;
+    padding-left: 0;
   }
 
   .about-content {

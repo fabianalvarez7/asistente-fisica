@@ -3,9 +3,9 @@
 Thin composition layer (AGENTS.md §7 decision 9): embed → retrieve →
 threshold → prompt → Groq SSE stream. Keeps all RAG logic out of FastAPI.
 
-The Groq call injects a static few-shot message block before the live query
-so the model sees concrete Socratic user/assistant turns without bloating the
-system prompt.
+The theory-mode Groq call injects a static few-shot message block before the
+live query so the model sees concrete Socratic user/assistant turns without
+bloating the system prompt. Exercise mode is limited to its curated scope.
 """
 
 import os
@@ -13,6 +13,7 @@ from typing import Generator
 
 from openai import OpenAI
 
+from rag.exercises import Exercise
 from rag.prompts import SYSTEM_PROMPT
 from rag.retrievers import EmbeddingsModel, VectorStore
 
@@ -38,6 +39,9 @@ _DEFAULT_MODEL = "openai/gpt-oss-120b"
 _DISTANCE_THRESHOLD = 0.5  # cosine distance; distance <= 0.5 => cos_sim >= 0.5
 _NO_CONTEXT_FALLBACK = "No encuentro info sobre esto en los apuntes"
 _FALLBACK_ERROR = "Ocurrió un error, intentá de nuevo"
+EXERCISE_PROGRESS_ERROR = (
+    "No se pudo leer tu progreso. No se generó una nueva guía. Reintentá."
+)
 
 # Few-shot Socratic examples: 3 user/assistant pairs spanning error theory,
 # kinematics, and dynamics. Each assistant turn uses Rioplatense voseo, ends
@@ -100,9 +104,38 @@ def _build_context(documents: list) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _build_exercise_scope(exercise: Exercise, checkpoint_index: int) -> str:
+    """Build controlled scope instructions without exposing the teacher key."""
+    concepts = ", ".join(exercise.concepts)
+    if checkpoint_index >= len(exercise.checkpoints):
+        current_guidance = (
+            "El estudiante ya completó los checkpoints. Ayudalo a verificar "
+            "sus resultados sin agregar pasos nuevos."
+        )
+    else:
+        checkpoint = exercise.checkpoints[max(checkpoint_index, 0)]
+        current_guidance = (
+            f"Checkpoint actual ({checkpoint.id}): {checkpoint.prompt}\n"
+            f"Ayuda permitida para este punto: {checkpoint.hint}"
+        )
+    return (
+        f"ID: {exercise.id}\n"
+        f"Título: {exercise.title}\n"
+        f"Enunciado controlado: {exercise.statement}\n"
+        f"Conceptos permitidos: {concepts}\n"
+        f"{current_guidance}\n"
+        "No resuelvas otro ejercicio ni completes este ejercicio por el estudiante. "
+        "Si la pregunta se sale de este enunciado, responde exactamente: "
+        '"No encuentro info sobre esto en los apuntes".'
+    )
+
+
 def generate_response(
     query: str,
     history: list[dict] | None = None,
+    *,
+    exercise: Exercise | None = None,
+    checkpoint_index: int | None = None,
 ) -> Generator[str, None, None]:
     """Orchestrate RAG pipeline and stream Groq tokens as SSE frames.
 
@@ -111,6 +144,10 @@ def generate_response(
       - history: optional list of {"role": ..., "content": ...} dicts from
         SQLite, ordered chronologically. Injected between _FEW_SHOT and the
         current query. None or [] means single-turn (no history).
+       - exercise: selected curated exercise for exercise mode. ``None`` keeps
+         the existing course-wide theory-chat behavior.
+      - checkpoint_index: canonical next checkpoint index for exercise mode.
+        It is never inferred from chat history. ``None`` fails closed.
       - GROQ_API_KEY is assumed present (guaranteed by app/main.py boot check).
       - ChromaDB collection is assumed non-empty (guaranteed by app/main.py).
 
@@ -119,9 +156,10 @@ def generate_response(
           data: <token>\n\n
           event: error\ndata: <msg>\n\n
           data: [DONE]\n\n
-      - No-context fallback: if best cosine_dist > 0.5, yields a single
-        data: "No encuentro info sobre esto en los apuntes" frame, then
-        data: [DONE]. Groq is NEVER called.
+       - Theory no-context fallback: if best cosine_dist > 0.5, yields a single
+         data: "No encuentro info sobre esto en los apuntes" frame, then
+         data: [DONE]. Groq is NEVER called. Exercise mode uses only the
+         selected exercise's curated scope.
       - Always terminates with data: [DONE].
 
     Exception contract:
@@ -129,21 +167,40 @@ def generate_response(
         then the generator ends with data: [DONE].
     """
     try:
-        query_embedding = _EMBEDDINGS.embed_query(query)
-        scored_docs = _VECTOR_STORE.similarity_search_with_scores(query_embedding, k=4)
+        if exercise is None:
+            query_embedding = _EMBEDDINGS.embed_query(query)
+            scored_docs = _VECTOR_STORE.similarity_search_with_scores(
+                query_embedding, k=4
+            )
+            if not scored_docs or scored_docs[0][1] > _DISTANCE_THRESHOLD:
+                yield f"data: {_NO_CONTEXT_FALLBACK}\n\n"
+                yield "data: [DONE]\n\n"
+                return
 
-        if not scored_docs or scored_docs[0][1] > _DISTANCE_THRESHOLD:
-            yield f"data: {_NO_CONTEXT_FALLBACK}\n\n"
-            yield "data: [DONE]\n\n"
-            return
-
-        documents = [doc for doc, _ in scored_docs]
-        context = _build_context(documents)
-        prompt = SYSTEM_PROMPT.format(context=context)
+            documents = [doc for doc, _ in scored_docs]
+            context = _build_context(documents)
+            exercise_scope = (
+                "No hay un ejercicio curado seleccionado. "
+                "Aplicá únicamente las reglas RAG generales."
+            )
+        else:
+            if checkpoint_index is None:
+                yield f"event: error\ndata: {EXERCISE_PROGRESS_ERROR}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            # Exercise mode is deliberately independent from the global course
+            # index. This scope is the only context allowed for the selected
+            # published exercise.
+            context = _build_exercise_scope(exercise, checkpoint_index)
+            exercise_scope = context
+        prompt = SYSTEM_PROMPT.format(
+            context=context,
+            exercise_scope=exercise_scope,
+        )
 
         messages = [
             {"role": "system", "content": prompt},
-            *_FEW_SHOT,
+            *(_FEW_SHOT if exercise is None else []),
         ]
         if history:
             # Project to {role, content} only: get_history() returns SQLite

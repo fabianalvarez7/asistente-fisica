@@ -11,6 +11,7 @@ from functools import partial
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -24,7 +25,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # HF Spaces injects env vars directly (no .env file), so this only affects
 # local dev.
 load_dotenv()
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -39,6 +40,8 @@ from rag.history import (
     get_message_owner,
     save_message,
     get_history,
+    get_exercise_progress,
+    advance_exercise_progress,
     delete_message,
 )
 import rag.history_async as history_async
@@ -49,7 +52,15 @@ from rag.history_async import (
     enqueue_write,
     get_write_worker,
 )
-from rag.chain import generate_response
+from rag.chain import EXERCISE_PROGRESS_ERROR, generate_response
+from rag.exercises import (
+    get_exercise,
+    get_published_exercises,
+    evaluate_checkpoint,
+    filter_review_messages,
+    serialize_progress,
+    serialize_for_student,
+)
 from rag.retrievers import VectorStore
 from rag.topics import load_topics
 
@@ -114,10 +125,14 @@ HISTORY_TIMEOUT_SECONDS = _parse_history_timeout(
 
 ERROR_FALLBACK = "Ocurrió un error, intentá de nuevo"
 DB_ERROR_MESSAGE = "No se pudo guardar la conversación. Reintentá en un momento."
+EXERCISE_COMPLETED_MESSAGE = (
+    "Este ejercicio ya está completo. Revisá la reseña de respuestas para continuar."
+)
 DASHBOARD_ERROR_MESSAGE = (
     "No se pudieron cargar las métricas en este momento. Intentá nuevamente más tarde."
 )
 _DASHBOARD_HTML = Path(__file__).resolve().parent / "static" / "dashboard.html"
+_EXERCISES_HTML = Path(__file__).resolve().parent / "static" / "exercises.html"
 
 #: SSE ``event:`` name announcing the persistence layer's health for the
 #: current request. ``data:`` payload is ``"degraded"`` when at least one
@@ -156,10 +171,17 @@ def _log_write_observation_failure(operation: str) -> None:
     _log_history_failure(operation, HistoryUnavailableError("write unavailable"))
 
 
-def _queued_save_message(student_id: int, role: str, content: str):
+def _queued_save_message(
+    student_id: int,
+    role: str,
+    content: str,
+    exercise_id: str | None = None,
+):
     """Keep already-classified history failures terminal at the queue edge."""
     try:
-        return save_message(student_id, role, content)
+        if exercise_id is None:
+            return save_message(student_id, role, content)
+        return save_message(student_id, role, content, exercise_id)
     except HistoryUnavailableError as exc:
         # The sync boundary attaches the original driver error as __cause__.
         # A cause-less wrapper is already classified/exhausted and must not
@@ -176,6 +198,14 @@ def _enqueue_history_write(fn, /, *args):
         # this transport module, so spawn does not import the whole FastAPI app.
         fn = save_message
     return enqueue_write(fn, *args, call_timeout=HISTORY_TIMEOUT_SECONDS)
+
+
+def _enqueue_message(student_id: int, role: str, content: str, exercise_id: str | None):
+    """Queue a message while keeping the legacy theory-call shape intact."""
+    args = (student_id, role, content)
+    if exercise_id is not None:
+        args += (exercise_id,)
+    return _enqueue_history_write(_queued_save_message, *args)
 
 
 def _next_token(tokens):
@@ -245,6 +275,19 @@ class ChatRequest(BaseModel):
         min_length=1,
         description="Display name typed by the student. Required — no anonymous chat.",
     )
+    exercise_id: str | None = Field(
+        default=None,
+        description="Published curated exercise selected by the student.",
+    )
+
+
+class CheckpointRequest(BaseModel):
+    """Student response for the deterministic exercise tutor."""
+
+    student_name: str = Field(..., min_length=1)
+    checkpoint_id: str = Field(..., min_length=1)
+    answer_ids: list[str] = Field(default_factory=list, max_length=8)
+    action: Literal["answer", "hint", "help"] = "answer"
 
 
 @app.post("/chat")
@@ -266,11 +309,26 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    if req.exercise_id is None:
+        exercise_id = None
+        exercise = None
+    else:
+        exercise_id = req.exercise_id.strip()
+        if not exercise_id:
+            raise HTTPException(status_code=400, detail="exercise_id cannot be empty")
+        exercise = get_exercise(exercise_id)
+        if exercise is None:
+            raise HTTPException(
+                status_code=400,
+                detail="exercise_id must identify a published exercise",
+            )
+
     deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
     student_id = None
     user_message_id = None
     user_write_timed_out = False
     history = []
+    checkpoint_index = None
     history_degraded = False
 
     try:
@@ -282,9 +340,35 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         history_degraded = True
 
     if student_id is not None:
-        user_pending = _enqueue_history_write(
-            _queued_save_message, student_id, "user", req.query
-        )
+        if exercise_id is not None:
+            try:
+                checkpoint_index = await bounded_call(
+                    get_exercise_progress,
+                    student_id,
+                    exercise_id,
+                    timeout=deadline.left,
+                )
+            except HistoryUnavailableError as exc:
+                _log_history_failure("read_exercise_progress", exc)
+                history_degraded = True
+
+        if (
+            exercise is not None
+            and checkpoint_index is not None
+            and checkpoint_index >= len(exercise.checkpoints)
+        ):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": {
+                        "code": "exercise_completed",
+                        "message": EXERCISE_COMPLETED_MESSAGE,
+                        "retryable": False,
+                    }
+                },
+            )
+
+        user_pending = _enqueue_message(student_id, "user", req.query, exercise_id)
         user_message_id = await user_pending.resolve(deadline.left)
         user_write_timed_out = (
             user_message_id is None and not user_pending.future.done()
@@ -294,8 +378,11 @@ async def chat(req: ChatRequest) -> StreamingResponse:
             history_degraded = True
 
         try:
+            history_kwargs = {"limit": HISTORY_WINDOW}
+            if exercise_id is not None:
+                history_kwargs["exercise_id"] = exercise_id
             history = await bounded_call(
-                partial(get_history, student_id, limit=HISTORY_WINDOW),
+                partial(get_history, student_id, **history_kwargs),
                 timeout=deadline.left,
             )
         except HistoryUnavailableError as exc:
@@ -314,8 +401,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 return None
 
             fallback_save_attempted = True
-            fallback_pending = _enqueue_history_write(
-                _queued_save_message, student_id, "assistant", ERROR_FALLBACK
+            fallback_pending = _enqueue_message(
+                student_id, "assistant", ERROR_FALLBACK, exercise_id
             )
             assistant_message_id = await fallback_pending.resolve(
                 HISTORY_TIMEOUT_SECONDS
@@ -329,11 +416,11 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 f"data: {assistant_message_id}\n\n"
             )
 
-        async def generation_error_frames():
+        async def generation_error_frames(error_message=ERROR_FALLBACK):
             message_id_frame = await fallback_message_id_frame()
             if message_id_frame is not None:
                 yield message_id_frame
-            yield f"event: error\ndata: {ERROR_FALLBACK}\n\n"
+            yield f"event: error\ndata: {error_message}\n\n"
             yield "data: [DONE]\n\n"
 
         # Announce degraded history BEFORE the user_message_id so the banner
@@ -349,8 +436,18 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         if user_message_id is not None:
             yield f"event: user_message_id\ndata: {user_message_id}\n\n"
 
+        if exercise is not None and checkpoint_index is None:
+            async for frame in generation_error_frames(EXERCISE_PROGRESS_ERROR):
+                yield frame
+            return
+
         try:
-            tokens = iter(generate_response(req.query, history=history))
+            generation_kwargs = {"history": history, "exercise": exercise}
+            if exercise is not None and checkpoint_index is not None:
+                generation_kwargs["checkpoint_index"] = checkpoint_index
+            tokens = iter(
+                generate_response(req.query, **generation_kwargs)
+            )
         except Exception:  # noqa: BLE001
             async for frame in generation_error_frames():
                 yield frame
@@ -378,8 +475,8 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                 payload = token[6:].removesuffix("\n\n")
                 if payload == "[DONE]":
                     if not failed and student_id is not None:
-                        assistant_pending = _enqueue_history_write(
-                            _queued_save_message, student_id, "assistant", buffer
+                        assistant_pending = _enqueue_message(
+                            student_id, "assistant", buffer, exercise_id
                         )
                         if not user_write_timed_out:
                             assistant_message_id = await assistant_pending.resolve(
@@ -413,7 +510,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
 
 @app.get("/history")
-async def get_history_endpoint(student_name: str):
+async def get_history_endpoint(student_name: str, exercise_id: str | None = None):
     """Return all messages for a student, ordered by created_at ASC.
 
     First-time identification: if the typed name has no student row yet, the
@@ -425,8 +522,21 @@ async def get_history_endpoint(student_name: str):
     if not name:
         raise HTTPException(status_code=400, detail="student_name cannot be empty")
 
+    exercise = None
+    if exercise_id is not None:
+        exercise_id = exercise_id.strip()
+        if not exercise_id:
+            raise HTTPException(status_code=400, detail="exercise_id cannot be empty")
+        exercise = get_exercise(exercise_id)
+        if exercise is None:
+            raise HTTPException(
+                status_code=400,
+                detail="exercise_id must identify a published exercise",
+            )
+
     operation = "lookup_student"
     history_degraded = False
+    completed_review = None
     deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
     try:
         student_id = await bounded_call(
@@ -439,28 +549,57 @@ async def get_history_endpoint(student_name: str):
             student_id = await bounded_call(
                 get_or_create_student, name, timeout=deadline.left
             )
-            operation = "save_welcome_message"
-            welcome_pending = _enqueue_history_write(
-                _queued_save_message,
-                student_id,
-                "assistant",
-                WELCOME_MESSAGE.format(name=name),
-            )
-            welcome_message_id = await welcome_pending.resolve(deadline.left)
-            if welcome_message_id is None:
-                _log_write_observation_failure("save_welcome_message")
-                history_degraded = True
+            if exercise_id is None:
+                operation = "save_welcome_message"
+                welcome_pending = _enqueue_message(
+                    student_id,
+                    "assistant",
+                    WELCOME_MESSAGE.format(name=name),
+                    None,
+                )
+                welcome_message_id = await welcome_pending.resolve(deadline.left)
+                if welcome_message_id is None:
+                    _log_write_observation_failure("save_welcome_message")
+                    history_degraded = True
 
-        operation = "read_history"
-        messages = await bounded_call(
-            get_history, student_id, timeout=deadline.left
-        )
+        if exercise_id is not None:
+            operation = "read_exercise_progress"
+            checkpoint_index = await bounded_call(
+                get_exercise_progress,
+                student_id,
+                exercise.id,
+                timeout=deadline.left,
+            )
+            if checkpoint_index >= len(exercise.checkpoints):
+                # A completed exercise must never replay persisted tutor turns.
+                # The canonical progress payload is the only review data that
+                # may be returned after completion.
+                completed_review = serialize_progress(exercise, checkpoint_index)[
+                    "completed_review"
+                ]
+                messages = []
+            else:
+                operation = "read_history"
+                messages = await bounded_call(
+                    partial(get_history, student_id, exercise_id=exercise.id),
+                    timeout=deadline.left,
+                )
+                messages = filter_review_messages(exercise, messages)
+        else:
+            operation = "read_history"
+            messages = await bounded_call(
+                partial(get_history, student_id),
+                timeout=deadline.left,
+            )
     except HistoryUnavailableError as exc:
         _log_history_failure(operation, exc)
         messages = []
         history_degraded = True
 
-    return {"messages": messages, "degraded": history_degraded}
+    response = {"messages": messages, "degraded": history_degraded}
+    if completed_review is not None:
+        response["completed_review"] = completed_review
+    return response
 
 
 @app.get("/health")
@@ -527,6 +666,164 @@ async def get_topics():
         raise HTTPException(status_code=503, detail=f"Topics error: {exc!r}")
 
     return {"unidades": unidades}
+
+
+@app.get("/api/exercises")
+async def get_exercises():
+    """Return the published curated exercises available to students."""
+    return [
+        serialize_for_student(exercise)
+        for exercise in get_published_exercises()
+    ]
+
+
+async def _save_checkpoint_turn(
+    student_id: int,
+    exercise_id: str,
+    answer_text: str,
+    feedback: str,
+) -> None:
+    """Keep checkpoint attempts in the same exercise-scoped history stream."""
+
+    for role, content in (("user", answer_text), ("assistant", feedback)):
+        pending = _enqueue_message(student_id, role, content, exercise_id)
+        await pending.resolve(HISTORY_TIMEOUT_SECONDS)
+
+
+@app.get("/api/exercises/{exercise_id}/progress")
+async def get_exercise_progress_endpoint(exercise_id: str, student_name: str):
+    """Return the canonical checkpoint state for one student's exercise."""
+
+    exercise = get_exercise(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="exercise not found")
+    name = student_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="student_name cannot be empty")
+
+    deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
+    operation = "lookup_student_for_exercise_progress"
+    try:
+        student_id = await bounded_call(
+            get_or_create_student, name, timeout=deadline.left
+        )
+        operation = "read_exercise_progress"
+        checkpoint_index = await bounded_call(
+            get_exercise_progress,
+            student_id,
+            exercise.id,
+            timeout=deadline.left,
+        )
+    except HistoryUnavailableError as exc:
+        _log_history_failure(operation, exc)
+        raise HTTPException(status_code=503, detail=EXERCISE_PROGRESS_ERROR) from exc
+    return serialize_progress(exercise, checkpoint_index)
+
+
+@app.post("/api/exercises/{exercise_id}/checkpoint")
+async def submit_exercise_checkpoint(
+    exercise_id: str,
+    req: CheckpointRequest,
+):
+    """Validate one checkpoint answer and advance only after a correct answer."""
+
+    exercise = get_exercise(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="exercise not found")
+    name = req.student_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="student_name cannot be empty")
+
+    deadline = Deadline(HISTORY_TIMEOUT_SECONDS).start()
+    operation = "lookup_student_for_exercise_progress_for_checkpoint"
+    try:
+        student_id = await bounded_call(
+            get_or_create_student, name, timeout=deadline.left
+        )
+        operation = "read_exercise_progress_for_checkpoint"
+        checkpoint_index = await bounded_call(
+            get_exercise_progress,
+            student_id,
+            exercise.id,
+            timeout=deadline.left,
+        )
+    except HistoryUnavailableError as exc:
+        _log_history_failure(operation, exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "exercise_progress_unavailable",
+                "message": EXERCISE_PROGRESS_ERROR,
+                "retryable": True,
+            },
+        ) from exc
+    if checkpoint_index >= len(exercise.checkpoints):
+        return {
+            "result": "correct",
+            "feedback": "¡Terminaste este ejercicio!",
+            "hint": "",
+            "advanced": False,
+            "progress": serialize_progress(exercise, checkpoint_index),
+        }
+
+    checkpoint = exercise.checkpoints[checkpoint_index]
+    if req.checkpoint_id != checkpoint.id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Ese checkpoint ya no es el actual. Recargá el progreso "
+                    "del ejercicio."
+                ),
+                "progress": serialize_progress(exercise, checkpoint_index),
+            },
+        )
+
+    result = evaluate_checkpoint(
+        exercise,
+        req.checkpoint_id,
+        req.answer_ids,
+        action=req.action,
+    )
+    next_index = checkpoint_index
+    if result["advanced"]:
+        next_index = await bounded_call(
+            advance_exercise_progress,
+            student_id,
+            exercise.id,
+            checkpoint_index,
+            checkpoint_index + 1,
+            timeout=deadline.left,
+        )
+        next_index, did_advance = next_index
+        result["advanced"] = did_advance
+
+    selected_labels = [
+        option.label
+        for option in checkpoint.options
+        if option.id in req.answer_ids
+    ]
+    answer_text = (
+        "Pedí una pista"
+        if req.action == "hint"
+        else "Necesité ayuda"
+        if req.action == "help"
+        else "Respuesta: " + (", ".join(selected_labels) or "sin selección")
+    )
+    await _save_checkpoint_turn(
+        student_id,
+        exercise.id,
+        answer_text,
+        result["feedback"],
+    )
+    result["progress"] = serialize_progress(exercise, next_index)
+    return result
+
+
+@app.get("/exercises", include_in_schema=False)
+def exercises_page():
+    """Serve the dedicated student exercise experience."""
+    return FileResponse(_EXERCISES_HTML)
 
 
 @app.get("/api/dashboard")

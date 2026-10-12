@@ -46,6 +46,7 @@ const FALLBACK_ERROR = 'Ocurrió un error, intentá de nuevo';
 // survive a reload.
 const HISTORY_BANNER_ID = 'history-banner';
 let studentName = localStorage.getItem(STORAGE_KEY);
+let historyReady = false;
 
 /**
  * Show or hide the history-degraded banner. Idempotent: calling it
@@ -334,8 +335,10 @@ async function sendMessage(query) {
 }
 
 function setChatEnabled(enabled) {
-  input.disabled = !enabled;
-  sendBtn.disabled = !enabled;
+  historyReady = enabled;
+  const canChat = enabled && Boolean(studentName);
+  input.disabled = !canChat;
+  sendBtn.disabled = !canChat;
 }
 
 function startChat(name) {

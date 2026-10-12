@@ -39,6 +39,7 @@ class HistoryUnavailableError(Exception):
 #: Cached connection, created lazily on first use and reused across requests.
 _connection = None
 _connection_lock = threading.Lock()
+_exercise_progress_lock = threading.Lock()
 
 #: libsql_experimental is the Turso/libSQL driver used in production. It defines
 #: its own exception class (``libsql_experimental.Error``) which inherits from
@@ -318,14 +319,37 @@ def init_db(db_path: str | None = None) -> None:
             student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
             role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
             content TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            exercise_id TEXT NULL
         )
         """
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS exercise_progress (
+            student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            exercise_id TEXT NOT NULL,
+            checkpoint_index INTEGER NOT NULL CHECK(checkpoint_index >= 0),
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (student_id, exercise_id)
+        )
+        """
+    )
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(messages)").fetchall()
+    }
+    if "exercise_id" not in columns:
+        conn.execute("ALTER TABLE messages ADD COLUMN exercise_id TEXT NULL")
+    conn.execute(
+        """
         CREATE INDEX IF NOT EXISTS idx_messages_student_created
         ON messages(student_id, created_at)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_messages_student_exercise_created
+        ON messages(student_id, exercise_id, created_at)
         """
     )
     conn.commit()
@@ -391,7 +415,12 @@ def get_message_owner(message_id: int) -> int | None:
 
 
 @_reconnect_on_failure
-def save_message(student_id: int, role: str, content: str) -> int:
+def save_message(
+    student_id: int,
+    role: str,
+    content: str,
+    exercise_id: str | None = None,
+) -> int:
     """Insert a message row and return its id.
 
     ``role`` must be ``'user'`` or ``'assistant'``. Raises ``ValueError`` for
@@ -404,17 +433,21 @@ def save_message(student_id: int, role: str, content: str) -> int:
     conn = _get_connection()
     cursor = conn.execute(
         """
-        INSERT INTO messages (student_id, role, content, created_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO messages (student_id, role, content, created_at, exercise_id)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (student_id, role, content, _utc_now()),
+        (student_id, role, content, _utc_now(), exercise_id),
     )
     conn.commit()
     return cursor.lastrowid
 
 
 @_reconnect_on_failure
-def get_history(student_id: int, limit: int | None = None) -> list[dict]:
+def get_history(
+    student_id: int,
+    limit: int | None = None,
+    exercise_id: str | None = None,
+) -> list[dict]:
     """Return messages for a student, ordered by ``created_at ASC, id ASC``.
 
     Each element is a dict with keys ``id``, ``role``, ``content`` and
@@ -423,32 +456,146 @@ def get_history(student_id: int, limit: int | None = None) -> list[dict]:
     first). An empty list is returned when the student has no messages.
     """
     conn = _get_connection()
+    scope_clause = "exercise_id IS NULL" if exercise_id is None else "exercise_id = ?"
+    scope_params = () if exercise_id is None else (exercise_id,)
     if limit is None:
         cursor = conn.execute(
-            """
+            f"""
             SELECT id, role, content, created_at
             FROM messages
-            WHERE student_id = ?
+            WHERE student_id = ? AND {scope_clause}
             ORDER BY created_at ASC, id ASC
             """,
-            (student_id,),
+            (student_id, *scope_params),
         )
     else:
         cursor = conn.execute(
-            """
+            f"""
             SELECT id, role, content, created_at
             FROM (
                 SELECT id, role, content, created_at
                 FROM messages
-                WHERE student_id = ?
+                WHERE student_id = ? AND {scope_clause}
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
             )
             ORDER BY created_at ASC, id ASC
             """,
-            (student_id, limit),
+            (student_id, *scope_params, limit),
         )
     return _rows_to_dicts(cursor)
+
+
+@_reconnect_on_failure
+def get_exercise_progress(student_id: int, exercise_id: str) -> int:
+    """Return the next checkpoint index for one student and exercise."""
+
+    row = _get_connection().execute(
+        """
+        SELECT checkpoint_index
+        FROM exercise_progress
+        WHERE student_id = ? AND exercise_id = ?
+        """,
+        (student_id, exercise_id),
+    ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+@_reconnect_on_failure
+def save_exercise_progress(
+    student_id: int,
+    exercise_id: str,
+    checkpoint_index: int,
+) -> int:
+    """Persist forward-only checkpoint progress and return its canonical value."""
+
+    if checkpoint_index < 0:
+        raise ValueError("checkpoint_index cannot be negative")
+    conn = _get_connection()
+    conn.execute(
+        """
+        INSERT INTO exercise_progress
+            (student_id, exercise_id, checkpoint_index, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(student_id, exercise_id) DO UPDATE SET
+            checkpoint_index = MAX(exercise_progress.checkpoint_index, excluded.checkpoint_index),
+            updated_at = excluded.updated_at
+        """,
+        (student_id, exercise_id, checkpoint_index, _utc_now()),
+    )
+    conn.commit()
+    return get_exercise_progress(student_id, exercise_id)
+
+
+@_reconnect_on_failure
+def advance_exercise_progress(
+    student_id: int,
+    exercise_id: str,
+    expected_index: int,
+    next_index: int,
+) -> tuple[int, bool]:
+    """Advance progress only when the stored index still matches.
+
+    The read, compare, and write happen in one transaction. The boolean is
+    true only for the request that performed the transition; stale or
+    duplicate requests receive the canonical current index and do not write.
+    The process lock also protects the shared local SQLite/libSQL connection
+    from overlapping transactions in worker threads.
+    """
+
+    if expected_index < 0:
+        raise ValueError("expected_index cannot be negative")
+    if next_index <= expected_index:
+        raise ValueError("next_index must be greater than expected_index")
+
+    with _exercise_progress_lock:
+        conn = _get_connection()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                """
+                SELECT checkpoint_index
+                FROM exercise_progress
+                WHERE student_id = ? AND exercise_id = ?
+                """,
+                (student_id, exercise_id),
+            ).fetchone()
+            current_index = int(row[0]) if row is not None else 0
+            if current_index != expected_index:
+                conn.rollback()
+                return current_index, False
+
+            if row is None:
+                conn.execute(
+                    """
+                    INSERT INTO exercise_progress
+                        (student_id, exercise_id, checkpoint_index, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (student_id, exercise_id, next_index, _utc_now()),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE exercise_progress
+                    SET checkpoint_index = ?, updated_at = ?
+                    WHERE student_id = ?
+                      AND exercise_id = ?
+                      AND checkpoint_index = ?
+                    """,
+                    (
+                        next_index,
+                        _utc_now(),
+                        student_id,
+                        exercise_id,
+                        expected_index,
+                    ),
+                )
+            conn.commit()
+            return next_index, True
+        except Exception:
+            conn.rollback()
+            raise
 
 
 @_reconnect_on_failure
