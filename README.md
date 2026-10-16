@@ -56,7 +56,7 @@ python scripts/indexar_pdfs.py
 # 6. Levantar el chat
 uvicorn app.main:app --reload
 # → http://localhost:8000           chat de teoría
-# → http://localhost:8000/exercise  catálogo de ejercicios tutor
+# → http://localhost:8000/exercises catálogo de ejercicios tutor
 # → http://localhost:8000/dashboard dashboard público para profesoras
 
 # 7. (Solo para deploy HF Spaces) Re-bakear el índice después de cambiar el corpus
