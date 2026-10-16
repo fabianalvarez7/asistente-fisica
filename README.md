@@ -59,10 +59,7 @@ uvicorn app.main:app --reload
 # → http://localhost:8000/exercise  catálogo de ejercicios tutor
 # → http://localhost:8000/dashboard dashboard público para profesoras
 
-# 7. (Opcional) Dashboard fallback en Streamlit, en otra terminal
-streamlit run dashboard/app.py
-
-# 8. (Solo para deploy HF Spaces) Re-bakear el índice después de cambiar el corpus
+# 7. (Solo para deploy HF Spaces) Re-bakear el índice después de cambiar el corpus
 python scripts/preparar_indice_hf.py
 ```
 
@@ -85,7 +82,7 @@ asistente-fisica/
 ├── rag/index/           # Artefactos pre-bakeados para deploy
 │   ├── chroma/          # Índice ChromaDB
 │   └── hf-model/        # Snapshot del modelo de embeddings (gitignored)
-├── dashboard/           # Fallback Streamlit (referencia, no canónico)
+├── dashboard/           # Queries SQL reutilizadas por el dashboard y los tests
 ├── scripts/             # CLI: indexar_pdfs, preparar_indice_hf, smoke tests, etc.
 ├── data/                # ChromaDB + SQLite de desarrollo (gitignored)
 ├── tests/               # Pytest + specs de corridas manuales
