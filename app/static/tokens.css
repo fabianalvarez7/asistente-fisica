@@ -184,4 +184,12 @@
   font-family: 'KaTeX Math', 'Source Serif 4', Georgia, 'Times New Roman', serif;
   font-style: italic;
   font-weight: 400;
+  /* KaTeX_Math-Italic has a smaller x-height and cap-height than Geist
+   * (its glyphs are designed for math typesetting, not body copy), so at
+   * 1em the letters look smaller than the surrounding text. Bump the
+   * size to ~1.15em so the variables read as the same height as the
+   * body text. `line-height: 1` keeps the inline flow tight so the
+   * larger glyphs don't push neighbouring lines apart. */
+  font-size: 1.15em;
+  line-height: 1;
 }
