@@ -17,16 +17,17 @@
 | Vector store | ChromaDB (persistente, local) |
 | PDF loader | pymupdf4llm |
 | Embeddings | `intfloat/multilingual-e5-small` (local, MPS/CUDA/CPU) |
-| LLM | Groq (API) |
-| Persistencia | SQLite |
-| Frontend chat | HTML + JS plano |
-| Deploy | Hugging Face Spaces |
+| LLM | Groq (modelo `openai/gpt-oss-120b`) |
+| Persistencia | SQLite (Turso/libSQL en producción) |
+| Frontend chat | HTML + CSS + JS plano |
+| Frontend dashboard | HTML + CSS + JS plano (Streamlit queda como fallback) |
+| Deploy | Hugging Face Spaces Docker (cpu-basic, 16 GB RAM) |
 
 ## Prerrequisitos
 
 - **Python 3.11+** (probado con 3.12)
 - **macOS** (Apple Silicon) o **Windows** con NVIDIA GPU, o **Linux** (CPU)
-- **~600 MB de disco libre** para el modelo de embeddings `intfloat/multilingual-e5-small` (ya viene pre-bakeado en `rag/index/hf-model/`, LFS-tracked)
+- **~600 MB de disco libre** para el modelo de embeddings `intfloat/multilingual-e5-small` (en el Space lo descarga el Dockerfile en build time; en local, se baja la primera vez que corre la app)
 - **Una API key de Groq** (gratis) en https://console.groq.com
 
 ## Setup
