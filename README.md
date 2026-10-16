@@ -47,36 +47,49 @@ pip install -r requirements.txt
 # 4. Configurar secretos
 cp .env.example .env
 # Editar .env y setear GROQ_API_KEY
+# En producción (HF Spaces): TURSO_DATABASE_URL y TURSO_AUTH_TOKEN también son obligatorios (Secrets).
 
-# 5. (Una vez) Copiar PDFs a indexar a data/pdfs/
-# Los PDFs originales viven en material-fisica/ (gitignored)
-
-# 6. Indexar (tarda ~10 min por PDF de 5 páginas en Mac con MPS)
+# 5. Indexar los PDFs del cuadernillo (los originales viven en material-fisica/, gitignored)
 python scripts/indexar_pdfs.py
 
-# 7. Probar retrieval (próximamente: scripts/query.py en Día 6-7)
+# 6. Levantar el chat
+uvicorn app.main:app --reload
+# → http://localhost:8000           chat de teoría
+# → http://localhost:8000/exercise  catálogo de ejercicios tutor
+# → http://localhost:8000/dashboard dashboard público para profesoras
+
+# 7. (Opcional) Dashboard fallback en Streamlit, en otra terminal
+streamlit run dashboard/app.py
+
+# 8. (Solo para deploy HF Spaces) Re-bakear el índice después de cambiar el corpus
+python scripts/preparar_indice_hf.py
 ```
 
 ## Estructura
 
 ```
 asistente-fisica/
-├── app/                 # FastAPI backend
+├── app/                 # FastAPI backend (chat + endpoints del dashboard)
+│   └── static/          # HTML/CSS/JS servidos por FastAPI
 ├── rag/                 # Lógica de RAG
 │   ├── loaders/         # PDF → Markdown (pymupdf4llm)
 │   ├── splitters/       # Chunking (RecursiveCharacterTextSplitter)
-│   ├── retrievers/      # Embeddings + ChromaDB
-│   ├── prompts/         # System prompts
-│   └── chain.py         # Orquestación RAG
-├── scripts/             # CLI: indexar_pdfs.py, query.py
-├── data/                # ChromaDB + SQLite (gitignored)
-├── tests/
-├── docs/
-│   ├── STARTING.md      # Playbook
-│   ├── STATUS.md        # Estado del proyecto
-│   ├── gotchas.md       # Problemas conocidos y workarounds
-│   └── adr/             # Architecture Decision Records
-└── AGENTS.md            # Constitución del proyecto
+│   ├── retrievers/      # Embeddings + cliente ChromaDB
+│   ├── prompts/         # System prompt Socrático
+│   ├── chain.py         # Orquestación del pipeline RAG
+│   ├── exercises.py     # Catálogo de ejercicios tutor
+│   ├── history.py       # Persistencia del historial (Turso + SQLite)
+│   ├── history_async.py # Wrapper asíncrono del historial
+│   └── topics.py        # Sidebar de unidades y preguntas
+├── rag/index/           # Artefactos pre-bakeados para deploy
+│   ├── chroma/          # Índice ChromaDB
+│   └── hf-model/        # Snapshot del modelo de embeddings (gitignored)
+├── dashboard/           # Fallback Streamlit (referencia, no canónico)
+├── scripts/             # CLI: indexar_pdfs, preparar_indice_hf, smoke tests, etc.
+├── data/                # ChromaDB + SQLite de desarrollo (gitignored)
+├── tests/               # Pytest + specs de corridas manuales
+├── docs/                # ADRs, runbook de deploy (hf-space.md), guías para Nair
+└── AGENTS.md            # Constitución del proyecto (leer primero)
 ```
 
 ## Licencia MIT.
