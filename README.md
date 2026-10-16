@@ -1,6 +1,12 @@
 # FaradAI - Asistente de Física
 
 > FaradAI es un asistente de chat para estudiantes de **Física 1** de la Facultad de Cs. Bioquímicas y Farmacéuticas de la Universidad Nacional de Rosario. El asistente guía al alumno con preguntas, para transmitir los conceptos teóricos y la resolución de ejercicios, pero nunca responde directamente. Las respuestas se generan exclusivamente desde la bibliografía de la materia, con el catálogo de los ejercicios que se dan durante el cursado, resueltos con el procedimiento determinado por los profesores.
+>
+> Fue desarrollado en el marco de la convocatoria XperienciaUNR a cargo del Laboratorio de Experimentación Tecnológica (LET UNR) del Área de Ciencia, Tecnología e Innovación de la Universidad Nacional de Rosario. El prototipo es implementado por un grupo interdisciplinario formado por:
+> - Nair Sarquis, promotora (profesora de física de la FBIOyF de la UNR)
+> - Tatiana Gangge, gestora (alumna de Comunicación Social UNR)
+> - Fabián Alvarez, desarrollador (alumno de la Tecnicatura en Inteligencia Artificial UNR)
+> - Justo Irribarren, diseñador (alumno de Diseño Gráfico UNR)
 
 ## Stack
 
