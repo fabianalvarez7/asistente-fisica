@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from rag.exercises import (  # noqa: E402
     evaluate_checkpoint,
     get_exercise,
+    plain_text,
     serialize_progress,
     serialize_for_student,
 )
@@ -48,34 +49,34 @@ class CheckpointDomainTests(unittest.TestCase):
         progress = serialize_progress(self.exercise, 0)
         self.assertEqual(
             [option["id"] for option in progress["current_checkpoint"]["options"]],
-            ["time-position-meters-seconds", "time-velocity-meters-seconds", "position-time-seconds-meters"],
+            [
+                "initial-position-zero",
+                "initial-velocity-positive",
+                "initial-velocity-negative",
+                "initial-position-120",
+            ],
         )
         self.assertNotIn("constant-acceleration", str(progress))
         self.assertNotIn("teacher_key", str(progress))
 
     def test_checkpoint_parts_follow_the_curated_exercise_sections(self):
         self.assertEqual(
-            [checkpoint.part for checkpoint in self.exercise.checkpoints[:5]],
-            ["a"] * 5,
+            [checkpoint.part for checkpoint in self.exercise.checkpoints[:2]],
+            ["a"] * 2,
         )
         self.assertEqual(
-            [checkpoint.part for checkpoint in self.exercise.checkpoints[5:]],
-            ["b"] * (len(self.exercise.checkpoints) - 5),
+            [checkpoint.part for checkpoint in self.exercise.checkpoints[2:]],
+            ["b"] * 2,
         )
         self.assertEqual(serialize_progress(self.exercise, 0)["current_checkpoint"]["part"], "a")
-        self.assertEqual(serialize_progress(self.exercise, 5)["current_checkpoint"]["part"], "b")
+        self.assertEqual(serialize_progress(self.exercise, 2)["current_checkpoint"]["part"], "b")
 
     def test_graph_checkpoints_expose_only_current_safe_descriptors(self):
         for index, checkpoint_id, absent_ids in (
             (
-                6,
+                2,
                 "velocity-graph-shape",
                 ("acceleration-graph-shape", "acceleration-graph-correct"),
-            ),
-            (
-                10,
-                "acceleration-graph-shape",
-                ("final-verification", "velocity-graph-correct"),
             ),
         ):
             with self.subTest(checkpoint_id=checkpoint_id):
@@ -92,7 +93,6 @@ class CheckpointDomainTests(unittest.TestCase):
     def test_graph_checkpoint_correct_and_wrong_domain_branches(self):
         for checkpoint_id, correct_id, wrong_id in (
             ("velocity-graph-shape", "velocity-graph-correct", "velocity-graph-horizontal"),
-            ("acceleration-graph-shape", "acceleration-graph-correct", "acceleration-graph-zero"),
         ):
             with self.subTest(checkpoint_id=checkpoint_id):
                 correct = evaluate_checkpoint(self.exercise, checkpoint_id, [correct_id])
@@ -105,7 +105,6 @@ class CheckpointDomainTests(unittest.TestCase):
     def test_graph_checkpoints_reject_unknown_and_mixed_option_ids(self):
         for checkpoint_id, correct_id in (
             ("velocity-graph-shape", "velocity-graph-correct"),
-            ("acceleration-graph-shape", "acceleration-graph-correct"),
         ):
             for answer_ids in (["not-a-graph-option"], [correct_id, "not-a-graph-option"]):
                 with self.subTest(checkpoint_id=checkpoint_id, answer_ids=answer_ids):
@@ -163,8 +162,8 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "read-axes-units",
-                    "answer_ids": ["position-time-seconds-meters"],
+                    "checkpoint_id": "initial-conditions",
+                    "answer_ids": ["initial-position-120"],
                 },
             )
 
@@ -184,8 +183,11 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "read-axes-units",
-                    "answer_ids": ["time-position-meters-seconds"],
+                    "checkpoint_id": "initial-conditions",
+                    "answer_ids": [
+                        "initial-position-zero",
+                        "initial-velocity-positive",
+                    ],
                 },
             )
 
@@ -199,8 +201,7 @@ class CheckpointApiTests(unittest.TestCase):
 
     def test_graph_checkpoint_correct_and_wrong_api_branches(self):
         graph_checkpoints = (
-            (6, "velocity-graph-shape", "velocity-graph-correct", "velocity-graph-horizontal"),
-            (10, "acceleration-graph-shape", "acceleration-graph-correct", "acceleration-graph-zero"),
+            (2, "velocity-graph-shape", "velocity-graph-correct", "velocity-graph-horizontal"),
         )
         for index, checkpoint_id, correct_id, wrong_id in graph_checkpoints:
             with self.subTest(checkpoint_id=checkpoint_id, branch="wrong"):
@@ -247,8 +248,7 @@ class CheckpointApiTests(unittest.TestCase):
 
     def test_graph_checkpoint_rejects_unknown_and_mixed_option_ids_without_advancing(self):
         graph_checkpoints = (
-            (6, "velocity-graph-shape", "velocity-graph-correct"),
-            (10, "acceleration-graph-shape", "acceleration-graph-correct"),
+            (2, "velocity-graph-shape", "velocity-graph-correct"),
         )
         for index, checkpoint_id, correct_id in graph_checkpoints:
             for answer_ids in (["not-a-graph-option"], [correct_id, "not-a-graph-option"]):
@@ -286,7 +286,7 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "read-axes-units",
+                    "checkpoint_id": "initial-conditions",
                     "action": "hint",
                 },
             )
@@ -306,8 +306,8 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "motion-model",
-                    "answer_ids": ["constant-acceleration"],
+                    "checkpoint_id": "determine-initial-values",
+                    "answer_ids": ["equation-at-10"],
                 },
             )
 
@@ -327,8 +327,8 @@ class CheckpointApiTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(body["current_index"], 1)
-        self.assertEqual(body["current_checkpoint"]["id"], "motion-model")
-        self.assertIn("constant-acceleration", str(body))
+        self.assertEqual(body["current_checkpoint"]["id"], "determine-initial-values")
+        self.assertIn("equation-at-10", str(body))
         self.assertNotIn("initial-position-zero", str(body))
         self.assertNotIn("correct_option_ids", str(body))
 
@@ -349,11 +349,11 @@ class CheckpointApiTests(unittest.TestCase):
         self.assertEqual(first["question"], exercise.checkpoints[0].prompt)
         self.assertEqual(
             first["correct_answers"][0]["label"],
-            "t en segundos y x en metros",
+            "*x₀* = 0 m",
         )
         self.assertEqual(
             first["correct_answers"][0]["value"],
-            "time-position-meters-seconds",
+            "initial-position-zero",
         )
         self.assertNotIn("teacher_key", str(progress))
 
@@ -381,7 +381,7 @@ class CheckpointApiTests(unittest.TestCase):
     def test_graph_progress_api_returns_only_current_graph_options(self):
         with (
             patch.object(main, "get_or_create_student", return_value=1),
-            patch.object(main, "get_exercise_progress", return_value=6),
+            patch.object(main, "get_exercise_progress", return_value=2),
         ):
             response = self.client.get(
                 f"/api/exercises/{EXERCISE_ID}/progress",
@@ -415,17 +415,18 @@ class CheckpointApiTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "student_name cannot be empty")
 
     def test_exercise_history_review_filters_teacher_only_assistant_content(self):
+        exercise = get_exercise(EXERCISE_ID)
         persisted_messages = [
             {
                 "id": 1,
                 "role": "user",
-                "content": "Respuesta: t en segundos y x en metros",
+                "content": "Respuesta: x₀ = 0 m, La velocidad inicial es positiva",
                 "created_at": "2026-01-01T00:00:00Z",
             },
             {
                 "id": 2,
                 "role": "assistant",
-                "content": "Leemos una posición x medida en metros en función del tiempo t medido en segundos.",
+                "content": plain_text(exercise.checkpoints[0].explanation),
                 "created_at": "2026-01-01T00:00:01Z",
             },
             {
@@ -503,8 +504,8 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "read-axes-units",
-                    "answer_ids": ["time-position-meters-seconds"],
+                    "checkpoint_id": "initial-conditions",
+                    "answer_ids": ["initial-position-zero", "initial-velocity-positive"],
                 },
             )
 
@@ -526,8 +527,8 @@ class CheckpointApiTests(unittest.TestCase):
                 f"/api/exercises/{EXERCISE_ID}/checkpoint",
                 json={
                     "student_name": "Ana",
-                    "checkpoint_id": "read-axes-units",
-                    "answer_ids": ["time-position-meters-seconds"],
+                    "checkpoint_id": "initial-conditions",
+                    "answer_ids": ["initial-position-zero", "initial-velocity-positive"],
                 },
             )
 
@@ -624,11 +625,11 @@ class CheckpointPersistenceIntegrationTests(unittest.TestCase):
                         },
                     )
                     self.assertEqual(response.status_code, 200, response.text)
-                    if index == 4:
+                    if index == 1:
                         boundary_response = response
 
                 self.assertIsNotNone(boundary_response)
-                self.assertEqual(boundary_response.json()["progress"]["current_index"], 5)
+                self.assertEqual(boundary_response.json()["progress"]["current_index"], 2)
                 self.assertEqual(
                     boundary_response.json()["progress"]["current_checkpoint"]["part"],
                     "b",
@@ -693,7 +694,7 @@ assert.strictEqual(
     assert.ok(
       elements['exercise-review-list'].children.some(
         (item) => item.children[2].children.some(
-          (answer) => answer.textContent.includes('x(10)=120 m'),
+          (answer) => answer.innerHTML.includes('<i>x</i>(10)=120 m'),
         ),
       ),
     );

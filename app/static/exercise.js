@@ -52,6 +52,14 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, (match) => map[match]);
 }
 
+function formatPhysicsText(raw) {
+  return escapeHtml(raw).replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+}
+
+function plainLabelText(raw) {
+  return raw.replaceAll('*', '');
+}
+
 function renderAssistantMarkdown(text) {
   return escapeHtml(text).replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
 }
@@ -235,7 +243,7 @@ function showCheckpointFeedback(result, feedback) {
   if (!checkpointFeedback) return;
   checkpointFeedback.hidden = false;
   checkpointFeedback.className = `checkpoint-feedback checkpoint-feedback--${result}`;
-  checkpointFeedback.textContent = feedback;
+  checkpointFeedback.innerHTML = formatPhysicsText(feedback);
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -251,6 +259,21 @@ function createSvgElement(tag, attributes = {}) {
 function appendSvgText(svg, text, attributes) {
   const element = createSvgElement('text', attributes);
   element.textContent = text;
+  svg.appendChild(element);
+}
+
+function appendSvgAxisLabel(svg, label, attributes) {
+  const element = createSvgElement('text', attributes);
+  const separatorIndex = label.indexOf(' ');
+  const firstToken = separatorIndex === -1 ? label : label.slice(0, separatorIndex);
+  const first = createSvgElement('tspan', { 'font-style': 'italic' });
+  first.textContent = firstToken;
+  element.appendChild(first);
+  if (separatorIndex !== -1) {
+    const remainder = createSvgElement('tspan');
+    remainder.textContent = label.slice(separatorIndex);
+    element.appendChild(remainder);
+  }
   svg.appendChild(element);
 }
 
@@ -290,7 +313,7 @@ function renderGraphCard(option) {
   const svg = createSvgElement('svg', {
     viewBox: `0 0 ${width} ${height}`,
     role: 'img',
-    'aria-label': `${option.label}: ${descriptor.y_label} en función de ${descriptor.x_label}`,
+    'aria-label': `${plainLabelText(option.label)}: ${descriptor.y_label} en función de ${descriptor.x_label}`,
   });
   svg.classList.add('checkpoint-graph-svg');
 
@@ -335,8 +358,8 @@ function renderGraphCard(option) {
   [descriptor.x_min, (descriptor.x_min + descriptor.x_max) / 2, descriptor.x_max].forEach((value) => {
     appendSvgText(svg, String(value), { x: xFor(value), y: bottom + 17, class: 'checkpoint-graph-label', 'text-anchor': 'middle' });
   });
-  appendSvgText(svg, descriptor.x_label, { x: right, y: height - 2, class: 'checkpoint-graph-axis-label', 'text-anchor': 'end' });
-  appendSvgText(svg, descriptor.y_label, { x: 4, y: top + 2, class: 'checkpoint-graph-axis-label' });
+  appendSvgAxisLabel(svg, descriptor.x_label, { x: right, y: height - 2, class: 'checkpoint-graph-axis-label', 'text-anchor': 'end' });
+  appendSvgAxisLabel(svg, descriptor.y_label, { x: 4, y: top + 2, class: 'checkpoint-graph-axis-label' });
   return svg;
 }
 
@@ -364,7 +387,7 @@ function renderExerciseReview(review) {
     item.className = 'exercise-review-item';
     const question = document.createElement('p');
     question.className = 'exercise-review-question';
-    question.textContent = entry.question;
+    question.innerHTML = formatPhysicsText(entry.question);
     item.appendChild(question);
     const label = document.createElement('span');
     label.className = 'exercise-review-role';
@@ -374,7 +397,7 @@ function renderExerciseReview(review) {
     answers.className = 'exercise-review-answers';
     (Array.isArray(entry.correct_answers) ? entry.correct_answers : []).forEach((answer) => {
       const answerItem = document.createElement('li');
-      answerItem.textContent = answer.label;
+      answerItem.innerHTML = formatPhysicsText(answer.label);
       answers.appendChild(answerItem);
     });
     item.appendChild(answers);
@@ -404,9 +427,11 @@ function renderCheckpoint(state) {
     checkpointPart.textContent = completed ? '' : `Parte ${current.part}`;
   }
   progressBar.style.width = `${(state.completed_count / state.total) * 100}%`;
-  checkpointPrompt.textContent = completed
-    ? '¡Muy bien! Completaste el ejercicio.'
-    : current.prompt;
+  if (completed) {
+    checkpointPrompt.textContent = '¡Muy bien! Completaste el ejercicio.';
+  } else {
+    checkpointPrompt.innerHTML = formatPhysicsText(current.prompt);
+  }
   checkpointOptions.replaceChildren();
   if (completed) {
     renderExerciseReview(state.completed_review);
@@ -426,26 +451,26 @@ function renderCheckpoint(state) {
   checkpointSubmit.hidden = false;
   checkpointHint.hidden = false;
   checkpointHelp.hidden = false;
-   current.options.forEach((option) => {
-     const button = document.createElement('button');
-     button.type = 'button';
-     button.className = 'checkpoint-option';
-     const graph = current.presentation === 'graph' ? renderGraphCard(option) : null;
-     if (graph) {
-       button.classList.add('checkpoint-option--graph');
-       button.setAttribute('aria-label', option.label);
-       const graphWrapper = document.createElement('span');
-       graphWrapper.className = 'checkpoint-graph';
-       graphWrapper.appendChild(graph);
-       button.appendChild(graphWrapper);
-       const graphLabel = document.createElement('span');
-       graphLabel.className = 'checkpoint-graph-option-label';
-       graphLabel.textContent = option.label;
-       button.appendChild(graphLabel);
-     } else {
-       button.textContent = option.label;
-     }
-     button.dataset.optionId = option.id;
+  current.options.forEach((option) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'checkpoint-option';
+    button.setAttribute('aria-label', plainLabelText(option.label));
+    const graph = current.presentation === 'graph' ? renderGraphCard(option) : null;
+    if (graph) {
+      button.classList.add('checkpoint-option--graph');
+      const graphWrapper = document.createElement('span');
+      graphWrapper.className = 'checkpoint-graph';
+      graphWrapper.appendChild(graph);
+      button.appendChild(graphWrapper);
+      const graphLabel = document.createElement('span');
+      graphLabel.className = 'checkpoint-graph-option-label';
+      graphLabel.innerHTML = formatPhysicsText(option.label);
+      button.appendChild(graphLabel);
+    } else {
+      button.innerHTML = formatPhysicsText(option.label);
+    }
+    button.dataset.optionId = option.id;
     button.setAttribute('aria-pressed', 'false');
     button.addEventListener('click', () => {
       if (current.input_type === 'single_choice') selectedOptionIds.clear();
@@ -484,7 +509,13 @@ async function submitCheckpoint(action = 'answer') {
       }
       throw new Error(data.detail?.message || data.detail || `HTTP ${response.status}`);
     }
-    showCheckpointFeedback(data.result, data.feedback);
+    if (data.advanced === true) {
+      checkpointFeedback.hidden = true;
+      checkpointFeedback.textContent = '';
+      checkpointFeedback.className = 'checkpoint-feedback';
+    } else {
+      showCheckpointFeedback(data.result, data.feedback);
+    }
     if (data.progress) renderCheckpoint(data.progress);
   } catch (error) {
     if (isCurrentSelection(token)) showHint(error.message || FALLBACK_ERROR);
@@ -530,13 +561,13 @@ function renderExerciseCatalog() {
 
 function renderExerciseDetails(selectedExercise) {
   exerciseTitle.textContent = selectedExercise.title;
-  exerciseStatement.textContent = selectedExercise.statement;
+  exerciseStatement.innerHTML = formatPhysicsText(selectedExercise.statement);
   exerciseGraph.src = selectedExercise.graph_asset;
   exerciseGraph.hidden = false;
   starterIdeas.replaceChildren();
   selectedExercise.starter_ideas.forEach((idea) => {
     const item = document.createElement('li');
-    item.textContent = idea;
+    item.innerHTML = formatPhysicsText(idea);
     starterIdeas.appendChild(item);
   });
   exerciseStatus.textContent = '';

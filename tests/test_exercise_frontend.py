@@ -28,6 +28,7 @@ def _run_node_contract(
     checkpoint_post_503: bool = False,
     graph_checkpoint: bool = False,
     final_part_a: bool = False,
+    wrong_submission: bool = False,
     completed: bool = False,
     completed_review: list[dict] | None = None,
     history_messages: list[dict] | None = None,
@@ -37,10 +38,10 @@ def _run_node_contract(
         {
             "id": "cinematica-1d-ejercicio-02",
             "title": "Ejercicio de prueba",
-            "statement": "Observá el gráfico de posición.",
+            "statement": "Observá el gráfico de posición *x*(*t*).",
             "graph_asset": "/img/test-graph.png",
             "starter_ideas": [
-                "Primera pista desde el catálogo.",
+                "Primera pista: *t* y *x*.",
                 "Segunda pista desde el catálogo.",
             ],
         },
@@ -55,17 +56,17 @@ def _run_node_contract(
     current_checkpoint = {
         "id": "axes",
         "part": "a",
-        "prompt": "¿Qué representan los ejes?",
+        "prompt": "¿Qué representan *t* y *x*?",
         "input_type": "single_choice",
-        "options": [{"id": "axes-correct", "label": "t y x"}],
-        "hint": "Mirá las unidades.",
-        "help_hint": "El eje horizontal es t.",
+        "options": [{"id": "axes-correct", "label": "*t* y *x*"}],
+        "hint": "Mirá las unidades de *t*.",
+        "help_hint": "El eje horizontal es *t*.",
     }
     if graph_checkpoint:
         current_checkpoint = {
             "id": "velocity-graph-shape",
             "part": "b",
-            "prompt": "Dibujá v(t) en el cuadernillo y elegí el gráfico.",
+            "prompt": "Dibujá *v*(*t*) en el cuadernillo y elegí el gráfico.",
             "input_type": "single_choice",
             "presentation": "graph",
             "options": [
@@ -105,15 +106,15 @@ def _run_node_contract(
         current_checkpoint = {
             "id": "determine-initial-values",
             "part": "a",
-            "prompt": "Usando x(10) y x(20), ¿qué relaciones sirven?",
+            "prompt": "Usando *x*(10) y *x*(20), ¿qué relaciones sirven?",
             "input_type": "multi_select",
             "options": [
-                {"id": "equation-at-10", "label": "120 = 10v₀ + 50a"},
-                {"id": "equation-at-20", "label": "360 = 20v₀ + 200a"},
-                {"id": "solution-v0-a", "label": "v₀ = 6 m/s y a = 1,2 m/s²"},
+                {"id": "equation-at-10", "label": "120 = 10*v₀* + 50*a*"},
+                {"id": "equation-at-20", "label": "360 = 20*v₀* + 200*a*"},
+                {"id": "solution-v0-a", "label": "*v₀* = 6 m/s y *a* = 1,2 m/s²"},
             ],
             "hint": "Reemplazá cada tiempo en la ecuación general.",
-            "help_hint": "Las dos ecuaciones correctas salen de sustituir t=10 y t=20.",
+            "help_hint": "Las dos ecuaciones correctas salen de sustituir *t*=10 y *t*=20.",
         }
     script = f"""
 import assert from 'node:assert';
@@ -210,8 +211,8 @@ const completedReview = {json.dumps(completed_review or [
         {
           "checkpoint_id": "axes",
           "part": "a",
-          "question": "¿Qué representan los ejes?",
-          "correct_answers": [{"label": "t en segundos y x en metros", "value": "axes-correct"}],
+          "question": "¿Qué representan *t* y *x*?",
+          "correct_answers": [{"label": "*t* en segundos y *x* en metros", "value": "axes-correct"}],
         },
         {
           "checkpoint_id": "model",
@@ -222,6 +223,7 @@ const completedReview = {json.dumps(completed_review or [
       ])};
 const historyMessages = {json.dumps(history_messages or [])};
 const finalPartA = {json.dumps(final_part_a)};
+const wrongSubmission = {json.dumps(wrong_submission)};
 const viewportWidth = {viewport_width};
 const stylesheet = fs.readFileSync({json.dumps(str(STYLE_SHEET))}, 'utf8');
 const sse = 'event: error\\ndata: El error debe quedar visible\\n\\ndata: [DONE]\\n\\n';
@@ -242,9 +244,9 @@ const fetch = async (url, options = {{}}) => {{
     return {{
       ok: true,
       json: async () => ({{
-        current_index: finalPartA ? 4 : (completed ? 1 : 0),
-        total: finalPartA ? 11 : 1,
-        completed_count: finalPartA ? 4 : (completed ? 1 : 0),
+        current_index: finalPartA ? 1 : (completed ? 1 : 0),
+        total: finalPartA ? 4 : 1,
+        completed_count: finalPartA ? 1 : (completed ? 1 : 0),
         complete: completed,
         current_checkpoint: completed ? null : activeCheckpoint,
         ...(completed ? {{ completed_review: completedReview }} : {{}}),
@@ -263,24 +265,25 @@ const fetch = async (url, options = {{}}) => {{
     }} : {{
       ok: true,
       json: async () => ({{
-        result: 'correct',
-        feedback: 'Bien.',
-        advanced: true,
+         result: wrongSubmission ? 'incorrect' : 'correct',
+         feedback: wrongSubmission ? 'Todavía no: revisá *x*.' : 'Bien: *v*(*t*) queda creciente.',
+         advanced: !wrongSubmission,
          progress: finalPartA
            ? {{
-               current_index: 5,
-               total: 11,
-               completed_count: 5,
+               current_index: 2,
+               total: 4,
+               completed_count: 2,
                complete: false,
                current_checkpoint: {{
-                 id: 'velocity-and-acceleration',
-                 part: 'b',
-                 prompt: '¿Qué expresiones corresponden a v(t) y a(t)?',
-                 input_type: 'single_choice',
-                 options: [{{ id: 'velocity-acceleration-correct', label: 'v(t)=6+1,2t y a(t)=1,2 m/s²' }}],
-                 hint: 'Usá v(t)=v₀+at.',
-                 help_hint: 'La pendiente de v(t) es a.',
-               }},
+                  id: 'velocity-graph-shape',
+                  part: 'b',
+                   prompt: 'Dibujá *v*(*t*) y elegí el gráfico que corresponde.',
+                  input_type: 'single_choice',
+                  presentation: 'graph',
+                  options: [{{ id: 'velocity-graph-correct', label: 'Gráfico A' }}],
+                  hint: 'Buscá una recta creciente.',
+                  help_hint: 'La velocidad empieza en 6 m/s.',
+                }},
              }}
            : {{ current_index: 1, total: 1, completed_count: 1, complete: true, current_checkpoint: null }},
       }}),
@@ -362,12 +365,12 @@ class ExerciseFrontendContractTests(unittest.TestCase):
         result = _run_node_contract(
             """
 assert.strictEqual(elements['exercise-title'].textContent, catalog[0].title);
-assert.strictEqual(elements['exercise-statement'].textContent, catalog[0].statement);
+assert.strictEqual(elements['exercise-statement'].innerHTML, 'Observá el gráfico de posición <i>x</i>(<i>t</i>).');
 assert.strictEqual(elements['exercise-graph'].src, catalog[0].graph_asset);
 assert.strictEqual(elements['exercise-graph'].hidden, false);
 assert.deepStrictEqual(
-  elements['starter-ideas'].children.map((item) => item.textContent),
-  catalog[0].starter_ideas,
+  elements['starter-ideas'].children.map((item) => item.innerHTML),
+  ['Primera pista: <i>t</i> y <i>x</i>.', 'Segunda pista desde el catálogo.'],
 );
 """
         )
@@ -388,7 +391,7 @@ assert.strictEqual(elements['exercise-review'].hidden, true);
 await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(elements['exercise-title'].textContent, catalog[1].title);
-assert.strictEqual(elements['exercise-statement'].textContent, catalog[1].statement);
+assert.strictEqual(elements['exercise-statement'].innerHTML, catalog[1].statement);
 assert.strictEqual(elements['exercise-graph'].src, catalog[1].graph_asset);
 assert.ok(fetchCalls.some((call) => call.url.includes('/api/exercises/cinematica-1d-ejercicio-03/progress?')));
 assert.ok(fetchCalls.some((call) => call.url.includes('exercise_id=cinematica-1d-ejercicio-03')));
@@ -480,6 +483,8 @@ assert.deepStrictEqual(
   ['equation-at-10', 'equation-at-20', 'solution-v0-a'],
 );
 assert.strictEqual(elements['checkpoint-part'].textContent, 'Parte b');
+assert.strictEqual(elements['checkpoint-feedback'].hidden, true);
+assert.strictEqual(elements['checkpoint-feedback'].textContent, '');
 """,
             final_part_a=True,
         )
@@ -511,8 +516,8 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(elements['exercise-review'].hidden, false);
 assert.strictEqual(elements['exercise-review-list'].children.length, 2);
-assert.strictEqual(elements['exercise-review-list'].children[0].children[0].textContent, '¿Qué representan los ejes?');
-assert.strictEqual(elements['exercise-review-list'].children[0].children[2].children[0].textContent, 't en segundos y x en metros');
+assert.strictEqual(elements['exercise-review-list'].children[0].children[0].innerHTML, '¿Qué representan <i>t</i> y <i>x</i>?');
+assert.strictEqual(elements['exercise-review-list'].children[0].children[2].children[0].innerHTML, '<i>t</i> en segundos y <i>x</i> en metros');
 assert.strictEqual(elements['messages'].children.length, 0);
 assert.ok(!elements['exercise-review-list'].children.some((item) => item.textContent.includes('teacher_key')));
 assert.ok(!elements['exercise-review-list'].children.some((item) => item.textContent.includes('Respuesta: x₀ = 0 m')));
@@ -594,8 +599,10 @@ elements['student-name'].value = 'Ana';
 elements['name-area'].dispatchEvent({ type: 'submit', preventDefault() {} });
 await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.strictEqual(elements['checkpoint-prompt'].textContent, currentCheckpoint.prompt);
+assert.strictEqual(elements['checkpoint-prompt'].innerHTML, '¿Qué representan <i>t</i> y <i>x</i>?');
 assert.strictEqual(elements['checkpoint-options'].children.length, 1);
+assert.strictEqual(elements['checkpoint-options'].children[0].innerHTML, '<i>t</i> y <i>x</i>');
+assert.strictEqual(elements['checkpoint-options'].children[0].attributes['aria-label'], 't y x');
 elements['checkpoint-options'].children[0].click();
 assert.strictEqual(elements['checkpoint-options'].children[0].classList.contains('is-selected'), true);
 elements['checkpoint-submit'].click();
@@ -604,6 +611,25 @@ const checkpointCall = fetchCalls.find((call) => call.url.endsWith('/checkpoint'
 assert.ok(checkpointCall);
 assert.deepStrictEqual(JSON.parse(checkpointCall.options.body).answer_ids, ['axes-correct']);
 """
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_wrong_checkpoint_submission_keeps_formatted_feedback_visible(self):
+        result = _run_node_contract(
+            """
+elements['student-name'].value = 'Ana';
+elements['name-area'].dispatchEvent({ type: 'submit', preventDefault() {} });
+await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 0));
+elements['checkpoint-options'].children[0].click();
+elements['checkpoint-submit'].click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(elements['checkpoint-feedback'].hidden, false);
+assert.strictEqual(elements['checkpoint-feedback'].innerHTML, 'Todavía no: revisá <i>x</i>.');
+assert.strictEqual(elements['checkpoint-feedback'].textContent.includes('*'), false);
+""",
+            wrong_submission=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -623,7 +649,7 @@ assert.strictEqual(elements['checkpoint-options'].children.length, 2);
 const firstCard = elements['checkpoint-options'].children[0];
 assert.strictEqual(firstCard.classList.contains('checkpoint-option--graph'), true);
 assert.strictEqual(firstCard.children[0].children[0].tagName, 'svg');
-assert.strictEqual(firstCard.children[1].textContent, 'Gráfico A');
+assert.strictEqual(firstCard.children[1].innerHTML, 'Gráfico A');
 firstCard.click();
 assert.strictEqual(firstCard.classList.contains('is-selected'), true);
 elements['checkpoint-submit'].click();
@@ -688,7 +714,7 @@ for (const card of cards) {
   assert.strictEqual(svg.tagName, 'svg', 'graph card must render an SVG');
   assert.strictEqual(svg.attributes.viewBox, '0 0 240 160', 'SVG must retain its responsive viewBox');
   assert.strictEqual(svg.classList.contains('checkpoint-graph-svg'), true, 'SVG must retain its graph class');
-  assert.ok(label.textContent.length > 0);
+  assert.ok(label.innerHTML.length > 0);
 }
 """,
                     graph_checkpoint=True,

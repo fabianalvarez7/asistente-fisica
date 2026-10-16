@@ -58,6 +58,7 @@ from rag.exercises import (
     get_published_exercises,
     evaluate_checkpoint,
     filter_review_messages,
+    plain_text,
     serialize_progress,
     serialize_for_student,
 )
@@ -803,7 +804,7 @@ async def submit_exercise_checkpoint(
         for option in checkpoint.options
         if option.id in req.answer_ids
     ]
-    answer_text = (
+    answer_text = plain_text(
         "Pedí una pista"
         if req.action == "hint"
         else "Necesité ayuda"
@@ -814,7 +815,7 @@ async def submit_exercise_checkpoint(
         student_id,
         exercise.id,
         answer_text,
-        result["feedback"],
+        plain_text(result["feedback"]),
     )
     result["progress"] = serialize_progress(exercise, next_index)
     return result

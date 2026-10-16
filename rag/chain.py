@@ -13,7 +13,7 @@ from typing import Generator
 
 from openai import OpenAI
 
-from rag.exercises import Exercise
+from rag.exercises import Exercise, plain_text
 from rag.prompts import SYSTEM_PROMPT
 from rag.retrievers import EmbeddingsModel, VectorStore
 
@@ -115,13 +115,13 @@ def _build_exercise_scope(exercise: Exercise, checkpoint_index: int) -> str:
     else:
         checkpoint = exercise.checkpoints[max(checkpoint_index, 0)]
         current_guidance = (
-            f"Checkpoint actual ({checkpoint.id}): {checkpoint.prompt}\n"
-            f"Ayuda permitida para este punto: {checkpoint.hint}"
+            f"Checkpoint actual ({checkpoint.id}): {plain_text(checkpoint.prompt)}\n"
+            f"Ayuda permitida para este punto: {plain_text(checkpoint.hint)}"
         )
     return (
         f"ID: {exercise.id}\n"
         f"Título: {exercise.title}\n"
-        f"Enunciado controlado: {exercise.statement}\n"
+        f"Enunciado controlado: {plain_text(exercise.statement)}\n"
         f"Conceptos permitidos: {concepts}\n"
         f"{current_guidance}\n"
         "No resuelvas otro ejercicio ni completes este ejercicio por el estudiante. "

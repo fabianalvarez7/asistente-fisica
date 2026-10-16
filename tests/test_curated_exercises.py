@@ -17,7 +17,7 @@ sys.modules["rag.retrievers"] = _fake_retrievers
 from fastapi.testclient import TestClient  # noqa: E402
 
 from rag import history as history_module  # noqa: E402
-from rag.exercises import get_exercise  # noqa: E402
+from rag.exercises import get_exercise, plain_text  # noqa: E402
 
 with patch.object(history_module, "init_db"):
     import app.main as main  # noqa: E402
@@ -64,8 +64,8 @@ class CuratedExerciseEndpointTests(unittest.TestCase):
         self.assertEqual(
             data[0]["starter_ideas"],
             [
-                "Leé primero los ejes y sus unidades: t está en segundos y x en metros.",
-                "Observá la forma de la curva x(t) antes de sacar conclusiones.",
+                "Leé primero los ejes y sus unidades: *t* está en segundos y *x* en metros.",
+                "Observá la forma de la curva *x*(*t*) antes de sacar conclusiones.",
             ],
         )
 
@@ -335,12 +335,12 @@ class CuratedExerciseGenerationTests(unittest.TestCase):
             )
 
         prompt = create.call_args.kwargs["messages"][0]["content"]
-        self.assertIn(exercise.statement, prompt)
+        self.assertIn(plain_text(exercise.statement), prompt)
         self.assertIn("position-time graph", prompt)
-        self.assertIn(exercise.guidance[0].question, prompt)
+        self.assertIn(exercise.checkpoints[0].prompt, prompt)
         self.assertIn("No encuentro info sobre esto en los apuntes", prompt)
         self.assertNotIn("teacher_key", prompt)
-        prompt_beyond_statement = prompt.replace(exercise.statement, "")
+        prompt_beyond_statement = prompt.replace(plain_text(exercise.statement), "")
         starter_ideas = "\n".join(exercise.starter_ideas)
         for future_answer in (
             "x(10)=120 m",
@@ -349,7 +349,7 @@ class CuratedExerciseGenerationTests(unittest.TestCase):
         ):
             self.assertNotIn(future_answer, starter_ideas)
             self.assertNotIn(future_answer, prompt_beyond_statement)
-        self.assertNotIn(exercise.guidance[1].question, prompt)
+        self.assertNotIn(plain_text(exercise.checkpoints[1].prompt), prompt)
         embed_query.assert_not_called()
         retrieve.assert_not_called()
 
@@ -373,8 +373,8 @@ class CuratedExerciseGenerationTests(unittest.TestCase):
             )
 
         prompt = create.call_args.kwargs["messages"][0]["content"]
-        self.assertIn(exercise.guidance[2].question, prompt)
-        self.assertNotIn(exercise.guidance[-1].question, prompt)
+        self.assertIn(plain_text(exercise.checkpoints[2].prompt), prompt)
+        self.assertNotIn(plain_text(exercise.checkpoints[3].prompt), prompt)
 
     def test_graph_guidance_uses_only_the_current_checkpoint(self):
         exercise = get_exercise(EXERCISE_ID)
@@ -387,14 +387,14 @@ class CuratedExerciseGenerationTests(unittest.TestCase):
                 chain.generate_response(
                     "¿Cómo reviso mi dibujo?",
                     exercise=exercise,
-                    checkpoint_index=6,
+                    checkpoint_index=2,
                 )
             )
 
         prompt = create.call_args.kwargs["messages"][0]["content"]
-        self.assertIn(exercise.checkpoints[6].prompt, prompt)
-        self.assertIn(exercise.checkpoints[6].hint, prompt)
-        self.assertNotIn(exercise.checkpoints[10].prompt, prompt)
+        self.assertIn(plain_text(exercise.checkpoints[2].prompt), prompt)
+        self.assertIn(plain_text(exercise.checkpoints[2].hint), prompt)
+        self.assertNotIn(plain_text(exercise.checkpoints[3].prompt), prompt)
         self.assertNotIn("acceleration-graph-correct", prompt)
 
     def test_few_shot_examples_are_only_in_theory_prompts(self):

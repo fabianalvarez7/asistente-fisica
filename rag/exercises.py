@@ -7,10 +7,17 @@ assistant can validate progress without revealing the complete solution.
 
 from dataclasses import dataclass
 from itertools import combinations
+import re
 from typing import Literal
 
 
 ExerciseStatus = Literal["draft", "validated", "published", "archived"]
+
+
+def plain_text(value: str) -> str:
+    """Return the string with emphasis markers removed (for storage and LLM prompts)."""
+
+    return re.sub(r"\*([^*\n]+)\*", r"\1", value)
 
 
 @dataclass(frozen=True)
@@ -132,46 +139,6 @@ _V_GRAPH_CURVE = GraphDescriptor(
     x_label="t (s)",
     y_label="v (m/s)",
 )
-_A_GRAPH_CORRECT = GraphDescriptor(
-    kind="polyline",
-    points=((0, 1.2), (20, 1.2)),
-    x_min=0,
-    x_max=20,
-    y_min=-2,
-    y_max=2,
-    x_label="t (s)",
-    y_label="a (m/s²)",
-)
-_A_GRAPH_ZERO = GraphDescriptor(
-    kind="polyline",
-    points=((0, 0), (20, 0)),
-    x_min=0,
-    x_max=20,
-    y_min=-2,
-    y_max=2,
-    x_label="t (s)",
-    y_label="a (m/s²)",
-)
-_A_GRAPH_INCREASING = GraphDescriptor(
-    kind="polyline",
-    points=((0, -1), (20, 1.8)),
-    x_min=0,
-    x_max=20,
-    y_min=-2,
-    y_max=2,
-    x_label="t (s)",
-    y_label="a (m/s²)",
-)
-_A_GRAPH_NEGATIVE = GraphDescriptor(
-    kind="polyline",
-    points=((0, -1.2), (20, -1.2)),
-    x_min=0,
-    x_max=20,
-    y_min=-2,
-    y_max=2,
-    x_label="t (s)",
-    y_label="a (m/s²)",
-)
 
 
 EXERCISES: tuple[Exercise, ...] = (
@@ -183,19 +150,19 @@ EXERCISES: tuple[Exercise, ...] = (
         source_file="Fisica1-Cuadernillo-2026.pdf",
         source_page=29,
         statement=(
-            "2. A partir del gráfico de la curva mostrado x(t):\n"
+            "2. A partir del gráfico de la curva mostrado *x*(*t*):\n"
             "a. Escribir las ecuaciones correspondientes al movimiento, indicando "
             "los valores de posición y velocidad iniciales, así como de la "
             "aceleración si hubiera (en el origen de la gráfica, la curva "
             "parabólica forma un ángulo de salida α no nulo respecto de la horizontal).\n"
-            "b. Confeccionar las gráficas cinemáticas restantes: v(t) y a(t), "
+            "b. Confeccionar las gráficas cinemáticas restantes: *v*(*t*) y *a*(*t*), "
             "indicando en ellas los valores que asumen las magnitudes para los "
             "tiempos de 10 s y 20 s."
         ),
         graph_asset="/img/exercise-cinematica-1d-ejercicio-02.png",
         starter_ideas=(
-            "Leé primero los ejes y sus unidades: t está en segundos y x en metros.",
-            "Observá la forma de la curva x(t) antes de sacar conclusiones.",
+            "Leé primero los ejes y sus unidades: *t* está en segundos y *x* en metros.",
+            "Observá la forma de la curva *x*(*t*) antes de sacar conclusiones.",
         ),
         concepts=(
             "position-time graph",
@@ -206,199 +173,75 @@ EXERCISES: tuple[Exercise, ...] = (
         ),
         guidance=(
             GuidanceStep(
-                id="graph-reading",
-                question=(
-                    "¿Qué representan los ejes y qué unidades tienen?"
-                ),
-                expected_idea="El gráfico muestra posición x en metros en función del tiempo t en segundos.",
-                hint="Mirá primero las magnitudes y unidades antes de hacer cuentas.",
-            ),
-            GuidanceStep(
-                id="motion-model",
-                question=(
-                    "La curva x(t) es una parábola. ¿Qué modelo de movimiento representa?"
-                ),
-                expected_idea="Movimiento con aceleración constante.",
-                hint="Pensá qué ocurre con la posición cuando la velocidad cambia uniformemente.",
-            ),
-            GuidanceStep(
-                id="initial-position",
+                id="initial-conditions",
                 question="¿Qué podés identificar al comienzo del gráfico?",
-                expected_idea="x₀ = 0 m.",
-                hint="Buscá dónde corta la curva al eje de posición cuando comienza el tiempo.",
+                expected_idea="x₀ = 0 m y la velocidad inicial es positiva.",
+                hint="Observá dónde empieza la curva y hacia dónde crece al inicio.",
             ),
             GuidanceStep(
-                id="general-equation",
-                question="¿Qué forma tiene la ecuación de posición para aceleración constante?",
-                expected_idea="x(t) = x₀ + v₀t + ½at².",
-                hint="Es la ecuación que contiene posición inicial, velocidad inicial y aceleración.",
-            ),
-            GuidanceStep(
-                id="equations-from-graph",
+                id="determine-initial-values",
                 question=(
                     "Usando x(10)=120 m y x(20)=360 m, ¿qué relaciones y valores "
                     "sirven para determinar v₀ y a?"
                 ),
-                expected_idea="120 = 10v₀ + 50a y 360 = 20v₀ + 200a.",
-                hint="Reemplazá cada tiempo y posición en la ecuación general.",
+                expected_idea=(
+                    "120 = 10v₀ + 50a y 360 = 20v₀ + 200a; al resolver, "
+                    "v₀ = 6 m/s y a = 1,2 m/s²."
+                ),
+                hint="Reemplazá cada tiempo en la ecuación general y luego resolvé el sistema.",
             ),
             GuidanceStep(
-                id="solve-system",
-                question="Con v₀ y a conocidos, ¿qué expresiones corresponden a v(t) y a(t)?",
-                expected_idea="v₀ = 6 m/s y a = 1,2 m/s².",
-                hint="Podés usar eliminación: primero hacé que ambas ecuaciones tengan el mismo término 20v₀.",
-            ),
-            GuidanceStep(
-                id="velocity-and-acceleration",
+                id="velocity-graph-shape",
                 question=(
                     "Primero dibujá v(t) en el cuadernillo. Después, elegí el gráfico "
                     "que mejor representa tu dibujo."
                 ),
-                expected_idea="v(t) = 6 + 1,2t y a(t) = 1,2 m/s².",
-                hint="La velocidad es v(t)=v₀+at; la aceleración permanece constante.",
+                expected_idea="v(t) es una recta creciente que empieza en 6 m/s.",
+                hint="La velocidad inicial es v₀ y la pendiente de la recta es a.",
             ),
             GuidanceStep(
-                id="velocity-graph-shape",
-                question="¿Qué valor inicial y qué tipo de trazo debería tener v(t)?",
-                expected_idea="v(t) empieza en 6 m/s y es una recta creciente.",
-                hint="El intercepto es v₀ y la pendiente de v(t) es la aceleración.",
-            ),
-            GuidanceStep(
-                id="velocity-slope",
-                question="¿Qué signo tiene la pendiente de v(t)?",
-                expected_idea="La pendiente es positiva porque a = 1,2 m/s².",
-                hint="Una aceleración positiva hace que la velocidad aumente.",
-            ),
-            GuidanceStep(
-                id="requested-velocity-values",
-                question="¿Qué valores de velocidad corresponden a t=10 s y t=20 s?",
-                expected_idea="v(10)=18 m/s y v(20)=30 m/s.",
-                hint="Usá la expresión de v(t) y reemplazá cada tiempo pedido.",
-            ),
-            GuidanceStep(
-                id="acceleration-graph-shape",
-                question=(
-                    "Ahora dibujá a(t) en el cuadernillo. Después, elegí el gráfico "
-                    "que mejor representa tu dibujo."
-                ),
-                expected_idea="a(t) es una recta horizontal positiva en 1,2 m/s².",
-                hint="La aceleración no cambia con el tiempo en este movimiento.",
-            ),
-            GuidanceStep(
-                id="acceleration-value",
-                question="¿Qué valor debe marcar la gráfica a(t)?",
-                expected_idea="a(t)=1,2 m/s².",
-                hint="Es la pendiente constante de v(t).",
-            ),
-            GuidanceStep(
-                id="requested-acceleration-values",
-                question="¿Qué valores de aceleración corresponden a t=10 s y t=20 s?",
-                expected_idea="a(10)=1,2 m/s² y a(20)=1,2 m/s².",
-                hint="Como a(t) es constante, el valor se mantiene en ambos tiempos.",
-            ),
-            GuidanceStep(
-                id="verification",
-                question="¿Cómo verificarías que las ecuaciones representan el gráfico?",
-                expected_idea=(
-                    "Evaluando x(10), x(20), v(10), v(20), a(10) y a(20), y "
-                    "comparando las formas de las gráficas."
-                ),
-                hint="Revisá los valores pedidos y compará las formas de v(t) y a(t).",
+                id="evaluate-requested-times",
+                question="¿Qué valores se obtienen al evaluar las magnitudes en los tiempos pedidos?",
+                expected_idea="x(10)=120 m, x(20)=360 m, v(10)=18 m/s y v(20)=30 m/s.",
+                hint="Sustituí t=10 y t=20 en x(t) y v(t).",
             ),
         ),
         checkpoints=(
-            Checkpoint(
-                id="read-axes-units",
-                prompt="¿Qué representan los ejes y qué unidades tienen?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("time-position-meters-seconds", "t en segundos y x en metros"),
-                    CheckpointOption("time-velocity-meters-seconds", "t en metros y v en segundos"),
-                    CheckpointOption("position-time-seconds-meters", "x en segundos y t en metros"),
-                ),
-                correct_option_ids=("time-position-meters-seconds",),
-                hint="Mirá primero qué magnitud aparece en cada eje y sus unidades.",
-                help_hint="El eje horizontal es t y el vertical es x.",
-                explanation="Leemos una posición x medida en metros en función del tiempo t medido en segundos.",
-            ),
-            Checkpoint(
-                id="motion-model",
-                prompt="La curva x(t) es una parábola. ¿Qué modelo de movimiento representa?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("constant-velocity", "Movimiento con velocidad constante"),
-                    CheckpointOption("constant-acceleration", "Movimiento con aceleración constante"),
-                    CheckpointOption("rest", "Partícula en reposo"),
-                ),
-                correct_option_ids=("constant-acceleration",),
-                hint="Pensá qué forma tiene x(t) cuando la velocidad cambia uniformemente.",
-                help_hint="Una parábola en x(t) aparece cuando la aceleración es constante.",
-                explanation="La forma parabólica de x(t) es compatible con una aceleración constante.",
-            ),
             Checkpoint(
                 id="initial-conditions",
                 prompt="¿Qué podés identificar al comienzo del gráfico?",
                 input_type="multi_select",
                 options=(
-                    CheckpointOption("initial-position-zero", "x₀ = 0 m"),
+                    CheckpointOption("initial-position-zero", "*x₀* = 0 m"),
                     CheckpointOption("initial-velocity-positive", "La velocidad inicial es positiva"),
                     CheckpointOption("initial-velocity-negative", "La velocidad inicial es negativa"),
-                    CheckpointOption("initial-position-120", "x₀ = 120 m"),
+                    CheckpointOption("initial-position-120", "*x₀* = 120 m"),
                 ),
                 correct_option_ids=("initial-position-zero", "initial-velocity-positive"),
                 hint="Observá dónde empieza la curva y hacia dónde crece al inicio.",
-                help_hint="La curva parte de x=0 y tiene pendiente inicial hacia arriba.",
-                explanation="El gráfico permite identificar x₀ = 0 m y una velocidad inicial positiva.",
-            ),
-            Checkpoint(
-                id="position-equation",
-                prompt="¿Qué forma tiene la ecuación de posición para aceleración constante?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("position-equation-correct", "x(t) = x₀ + v₀t + ½at²"),
-                    CheckpointOption("position-equation-linear", "x(t) = x₀ + vt"),
-                    CheckpointOption("position-equation-velocity", "x(t) = v₀ + at"),
-                ),
-                correct_option_ids=("position-equation-correct",),
-                hint="Elegí la expresión que contiene posición inicial, velocidad inicial y aceleración.",
-                help_hint="La aceleración constante aporta un término proporcional a t².",
-                explanation="La ecuación general incorpora x₀, v₀ y el término ½at².",
+                help_hint="La curva parte de *x*=0 y tiene pendiente inicial hacia arriba.",
+                explanation="El gráfico permite identificar *x₀* = 0 m y una velocidad inicial positiva.",
             ),
             Checkpoint(
                 id="determine-initial-values",
-                prompt="Usando x(10)=120 m y x(20)=360 m, ¿qué relaciones y valores sirven para determinar v₀ y a?",
+                prompt="Usando *x*(10)=120 m y *x*(20)=360 m, ¿qué relaciones y valores sirven para determinar *v₀* y *a*?",
                 input_type="multi_select",
                 options=(
-                    CheckpointOption("equation-at-10", "120 = 10v₀ + 50a"),
-                    CheckpointOption("equation-at-20", "360 = 20v₀ + 200a"),
-                    CheckpointOption("solution-v0-a", "Al resolver: v₀ = 6 m/s y a = 1,2 m/s²"),
-                    CheckpointOption("equation-at-10-wrong", "120 = 10v₀ + 10a"),
-                    CheckpointOption("solution-negative", "v₀ = -6 m/s y a = -1,2 m/s²"),
+                    CheckpointOption("equation-at-10", "120 = 10*v₀* + 50*a*"),
+                    CheckpointOption("equation-at-20", "360 = 20*v₀* + 200*a*"),
+                    CheckpointOption("solution-v0-a", "Al resolver: *v₀* = 6 m/s y *a* = 1,2 m/s²"),
+                    CheckpointOption("equation-at-10-wrong", "120 = 10*v₀* + 10*a*"),
+                    CheckpointOption("solution-negative", "*v₀* = -6 m/s y *a* = -1,2 m/s²"),
                 ),
                 correct_option_ids=("equation-at-10", "equation-at-20", "solution-v0-a"),
                 hint="Reemplazá cada tiempo en la ecuación general y luego resolvé el sistema.",
-                help_hint="Las dos ecuaciones correctas salen de sustituir t=10 y t=20; ambas llevan al mismo par v₀,a.",
-                explanation="Los puntos del gráfico forman un sistema que determina v₀ = 6 m/s y a = 1,2 m/s².",
-            ),
-            Checkpoint(
-                id="velocity-and-acceleration",
-                prompt="Con v₀ y a conocidos, ¿qué expresiones corresponden a v(t) y a(t)?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("velocity-acceleration-correct", "v(t)=6+1,2t y a(t)=1,2 m/s²"),
-                    CheckpointOption("velocity-acceleration-constant-v", "v(t)=6 y a(t)=0"),
-                    CheckpointOption("velocity-acceleration-swapped", "v(t)=1,2+6t y a(t)=6 m/s²"),
-                ),
-                correct_option_ids=("velocity-acceleration-correct",),
-                hint="Usá v(t)=v₀+at y recordá que la aceleración permanece constante.",
-                help_hint="La pendiente de v(t) es a y el valor inicial de v(t) es v₀.",
-                explanation="La velocidad crece linealmente y la aceleración queda constante.",
-                part="b",
+                help_hint="Las dos ecuaciones correctas salen de sustituir *t*=10 y *t*=20; ambas llevan al mismo par *v₀*,*a*.",
+                explanation="Los puntos del gráfico forman un sistema que determina *v₀* = 6 m/s y *a* = 1,2 m/s².",
             ),
             Checkpoint(
                 id="velocity-graph-shape",
                 prompt=(
-                    "Primero dibujá v(t) en el cuadernillo. Después, elegí el gráfico "
+                    "Primero dibujá *v*(*t*) en el cuadernillo. Después, elegí el gráfico "
                     "que mejor representa tu dibujo."
                 ),
                 input_type="single_choice",
@@ -416,116 +259,20 @@ EXERCISES: tuple[Exercise, ...] = (
                 presentation="graph",
             ),
             Checkpoint(
-                id="velocity-initial-value",
-                prompt="En tu dibujo de v(t), ¿qué valor debe marcar el intercepto en t=0?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("velocity-intercept-6", "6 m/s"),
-                    CheckpointOption("velocity-intercept-0", "0 m/s"),
-                    CheckpointOption("velocity-intercept-12", "12 m/s"),
-                ),
-                correct_option_ids=("velocity-intercept-6",),
-                hint="El intercepto de v(t) representa la velocidad inicial v₀.",
-                help_hint="Volvé al valor de v₀ que obtuviste antes de dibujar.",
-                explanation="La recta de velocidad corta el eje vertical en v₀ = 6 m/s.",
-                part="b",
-            ),
-            Checkpoint(
-                id="velocity-slope-sign",
-                prompt="¿Qué signo tiene la pendiente de v(t) en tu dibujo?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("velocity-slope-positive", "Positiva: la recta sube"),
-                    CheckpointOption("velocity-slope-zero", "Cero: la recta es horizontal"),
-                    CheckpointOption("velocity-slope-negative", "Negativa: la recta baja"),
-                ),
-                correct_option_ids=("velocity-slope-positive",),
-                hint="La pendiente de v(t) es la aceleración.",
-                help_hint="Una aceleración positiva hace que la velocidad aumente.",
-                explanation="La pendiente es positiva porque la aceleración vale 1,2 m/s².",
-                part="b",
-            ),
-            Checkpoint(
                 id="evaluate-requested-times",
                 prompt="¿Qué valores se obtienen al evaluar las magnitudes en los tiempos pedidos?",
                 input_type="multi_select",
                 options=(
-                    CheckpointOption("position-at-10", "x(10)=120 m"),
-                    CheckpointOption("position-at-20", "x(20)=360 m"),
-                    CheckpointOption("velocity-at-10", "v(10)=18 m/s"),
-                    CheckpointOption("velocity-at-20", "v(20)=30 m/s"),
-                    CheckpointOption("velocity-at-10-wrong", "v(10)=12 m/s"),
+                    CheckpointOption("position-at-10", "*x*(10)=120 m"),
+                    CheckpointOption("position-at-20", "*x*(20)=360 m"),
+                    CheckpointOption("velocity-at-10", "*v*(10)=18 m/s"),
+                    CheckpointOption("velocity-at-20", "*v*(20)=30 m/s"),
+                    CheckpointOption("velocity-at-10-wrong", "*v*(10)=12 m/s"),
                 ),
                 correct_option_ids=("position-at-10", "position-at-20", "velocity-at-10", "velocity-at-20"),
-                hint="Sustituí t=10 y t=20 en x(t) y v(t).",
-                help_hint="Los puntos x(10) y x(20) son los del gráfico; calculá v con v(t)=6+1,2t.",
-                explanation="Las evaluaciones recuperan los puntos conocidos y dan v(10)=18 m/s y v(20)=30 m/s.",
-                part="b",
-            ),
-            Checkpoint(
-                id="acceleration-graph-shape",
-                prompt=(
-                    "Ahora dibujá a(t) en el cuadernillo. Después, elegí el gráfico "
-                    "que mejor representa tu dibujo."
-                ),
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("acceleration-graph-correct", "Gráfico A", _A_GRAPH_CORRECT),
-                    CheckpointOption("acceleration-graph-zero", "Gráfico B", _A_GRAPH_ZERO),
-                    CheckpointOption("acceleration-graph-increasing", "Gráfico C", _A_GRAPH_INCREASING),
-                    CheckpointOption("acceleration-graph-negative", "Gráfico D", _A_GRAPH_NEGATIVE),
-                ),
-                correct_option_ids=("acceleration-graph-correct",),
-                hint="Buscá una línea horizontal por encima de cero.",
-                help_hint="La aceleración es constante y positiva: a(t)=1,2 m/s².",
-                explanation="El gráfico correcto es horizontal y positivo, en 1,2 m/s².",
-                part="b",
-                presentation="graph",
-            ),
-            Checkpoint(
-                id="acceleration-value",
-                prompt="¿Qué valor debe marcar la gráfica a(t)?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("acceleration-value-correct", "1,2 m/s²"),
-                    CheckpointOption("acceleration-value-zero", "0 m/s²"),
-                    CheckpointOption("acceleration-value-six", "6 m/s²"),
-                ),
-                correct_option_ids=("acceleration-value-correct",),
-                hint="La aceleración es la pendiente constante de v(t).",
-                help_hint="Usá el valor de a que obtuviste al resolver el sistema.",
-                explanation="La gráfica de aceleración se mantiene en 1,2 m/s².",
-                part="b",
-            ),
-            Checkpoint(
-                id="acceleration-at-requested-times",
-                prompt="¿Qué valores de aceleración corresponden a t=10 s y t=20 s?",
-                input_type="multi_select",
-                options=(
-                    CheckpointOption("acceleration-at-10", "a(10)=1,2 m/s²"),
-                    CheckpointOption("acceleration-at-20", "a(20)=1,2 m/s²"),
-                    CheckpointOption("acceleration-at-10-wrong", "a(10)=0 m/s²"),
-                    CheckpointOption("acceleration-at-20-wrong", "a(20)=6 m/s²"),
-                ),
-                correct_option_ids=("acceleration-at-10", "acceleration-at-20"),
-                hint="Como a(t) es constante, buscá el mismo valor en ambos tiempos.",
-                help_hint="La línea horizontal conserva su valor en t=10 s y t=20 s.",
-                explanation="a(10) y a(20) valen 1,2 m/s² porque la aceleración es constante.",
-                part="b",
-            ),
-            Checkpoint(
-                id="final-verification",
-                prompt="¿Cuál es una buena verificación final del modelo?",
-                input_type="single_choice",
-                options=(
-                    CheckpointOption("verify-correct", "Reemplazar t=10 y t=20, y revisar que v(t) sea lineal y a(t) constante"),
-                    CheckpointOption("verify-one-point", "Comprobar solamente que x(0)=0"),
-                    CheckpointOption("verify-ignore-graph", "No comparar las ecuaciones con el gráfico"),
-                ),
-                correct_option_ids=("verify-correct",),
-                hint="Una verificación usa más de un dato conocido y también compara la forma de las gráficas.",
-                help_hint="Revisá x(10), x(20), la recta v(t) y la constante a(t).",
-                explanation="El modelo queda verificado al recuperar los puntos conocidos y las formas esperadas de v(t) y a(t).",
+                hint="Sustituí *t*=10 y *t*=20 en *x*(*t*) y *v*(*t*).",
+                help_hint="Los puntos *x*(10) y *x*(20) son los del gráfico; calculá *v* con *v*(*t*)=6+1,2*t*.",
+                explanation="Las evaluaciones recuperan los puntos conocidos y dan *v*(10)=18 m/s y *v*(20)=30 m/s.",
                 part="b",
             ),
         ),
@@ -726,9 +473,12 @@ def filter_review_messages(exercise: Exercise, messages: list[dict]) -> list[dic
     }
     for checkpoint in exercise.checkpoints:
         feedback_texts.update(
-            (checkpoint.hint, checkpoint.help_hint, checkpoint.explanation)
+            tuple(
+                plain_text(value)
+                for value in (checkpoint.hint, checkpoint.help_hint, checkpoint.explanation)
+            )
         )
-        labels = [option.label for option in checkpoint.options]
+        labels = [plain_text(option.label) for option in checkpoint.options]
         for size in range(1, len(labels) + 1):
             answer_texts.update(
                 "Respuesta: " + ", ".join(selection)
