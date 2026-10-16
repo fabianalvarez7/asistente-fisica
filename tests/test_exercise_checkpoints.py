@@ -694,7 +694,7 @@ assert.strictEqual(
     assert.ok(
       elements['exercise-review-list'].children.some(
         (item) => item.children[2].children.some(
-          (answer) => answer.innerHTML.includes('<i>x</i>(10)=120 m'),
+          (answer) => answer.innerHTML.includes('<span class="physics-var">x</span>(10)=120 m'),
         ),
       ),
     );

@@ -53,7 +53,7 @@ function escapeHtml(text) {
 }
 
 function formatPhysicsText(raw) {
-  return escapeHtml(raw).replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+  return escapeHtml(raw).replace(/\*([^*\n]+)\*/g, '<span class="physics-var">$1</span>');
 }
 
 function plainLabelText(raw) {
@@ -266,7 +266,7 @@ function appendSvgAxisLabel(svg, label, attributes) {
   const element = createSvgElement('text', attributes);
   const separatorIndex = label.indexOf(' ');
   const firstToken = separatorIndex === -1 ? label : label.slice(0, separatorIndex);
-  const first = createSvgElement('tspan', { 'font-style': 'italic' });
+  const first = createSvgElement('tspan', { class: 'physics-var' });
   first.textContent = firstToken;
   element.appendChild(first);
   if (separatorIndex !== -1) {

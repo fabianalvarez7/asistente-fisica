@@ -49,6 +49,25 @@
 }
 
 /* -------------------------------------------------------------------------
+ * KaTeX_Math-Italic — physics variables in the exercise UI.
+ * Reuses the same font KaTeX renders for math variables in the theoretical
+ * answers (`$v_0$` → serif italic via KaTeX_Math-Italic), so the exercise
+ * statement, options and SVG axis labels look like a textbook instead of a
+ * generic `<i>` slanted Geist. KaTeX CSS does not declare KaTeX_Math outside
+ * the `.katex` scope, so we add our own rule pointing at the same woff2 the
+ * CDN already serves for the chat. If the font fails to load we fall back to
+ * Source Serif 4 italic, then to any serif italic available on the system.
+ * ------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'KaTeX Math';
+  src: url('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* -------------------------------------------------------------------------
  * Colors
  * Brand: green palette extracted from Figma. Primary is the soft green used
  * for the user bubble and the "Continuar" button. The pale-green background
@@ -147,4 +166,22 @@
                0 6px 10px  rgba(18, 22, 21, 0.14);
   --shadow-lg: 0 4px 8px   rgba(18, 22, 21, 0.12),
                0 12px 20px rgba(18, 22, 21, 0.18);
+}
+
+/* -------------------------------------------------------------------------
+ * Physics variable typography (matches the theoretical answers)
+ * Variables wrapped in *...* markers in the published exercise are rendered
+ * with KaTeX_Math-Italic so the visual treatment is identical to the math
+ * the assistant emits in the chat (`$v_0$` etc.). Fallback chain:
+ *   KaTeX Math (theoretical-answer typography)
+ *   → Source Serif 4 italic (book-like, already loaded)
+ *   → system serif italic
+ * Applied to inline text via <span class="physics-var"> and to SVG axis
+ * tspans via class="physics-var".
+ * ------------------------------------------------------------------------- */
+
+.physics-var {
+  font-family: 'KaTeX Math', 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
 }

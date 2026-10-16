@@ -365,12 +365,12 @@ class ExerciseFrontendContractTests(unittest.TestCase):
         result = _run_node_contract(
             """
 assert.strictEqual(elements['exercise-title'].textContent, catalog[0].title);
-assert.strictEqual(elements['exercise-statement'].innerHTML, 'Observá el gráfico de posición <i>x</i>(<i>t</i>).');
+assert.strictEqual(elements['exercise-statement'].innerHTML, 'Observá el gráfico de posición <span class="physics-var">x</span>(<span class="physics-var">t</span>).');
 assert.strictEqual(elements['exercise-graph'].src, catalog[0].graph_asset);
 assert.strictEqual(elements['exercise-graph'].hidden, false);
 assert.deepStrictEqual(
   elements['starter-ideas'].children.map((item) => item.innerHTML),
-  ['Primera pista: <i>t</i> y <i>x</i>.', 'Segunda pista desde el catálogo.'],
+  ['Primera pista: <span class="physics-var">t</span> y <span class="physics-var">x</span>.', 'Segunda pista desde el catálogo.'],
 );
 """
         )
@@ -516,8 +516,8 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(elements['exercise-review'].hidden, false);
 assert.strictEqual(elements['exercise-review-list'].children.length, 2);
-assert.strictEqual(elements['exercise-review-list'].children[0].children[0].innerHTML, '¿Qué representan <i>t</i> y <i>x</i>?');
-assert.strictEqual(elements['exercise-review-list'].children[0].children[2].children[0].innerHTML, '<i>t</i> en segundos y <i>x</i> en metros');
+assert.strictEqual(elements['exercise-review-list'].children[0].children[0].innerHTML, '¿Qué representan <span class="physics-var">t</span> y <span class="physics-var">x</span>?');
+assert.strictEqual(elements['exercise-review-list'].children[0].children[2].children[0].innerHTML, '<span class="physics-var">t</span> en segundos y <span class="physics-var">x</span> en metros');
 assert.strictEqual(elements['messages'].children.length, 0);
 assert.ok(!elements['exercise-review-list'].children.some((item) => item.textContent.includes('teacher_key')));
 assert.ok(!elements['exercise-review-list'].children.some((item) => item.textContent.includes('Respuesta: x₀ = 0 m')));
@@ -599,9 +599,9 @@ elements['student-name'].value = 'Ana';
 elements['name-area'].dispatchEvent({ type: 'submit', preventDefault() {} });
 await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.strictEqual(elements['checkpoint-prompt'].innerHTML, '¿Qué representan <i>t</i> y <i>x</i>?');
+assert.strictEqual(elements['checkpoint-prompt'].innerHTML, '¿Qué representan <span class="physics-var">t</span> y <span class="physics-var">x</span>?');
 assert.strictEqual(elements['checkpoint-options'].children.length, 1);
-assert.strictEqual(elements['checkpoint-options'].children[0].innerHTML, '<i>t</i> y <i>x</i>');
+assert.strictEqual(elements['checkpoint-options'].children[0].innerHTML, '<span class="physics-var">t</span> y <span class="physics-var">x</span>');
 assert.strictEqual(elements['checkpoint-options'].children[0].attributes['aria-label'], 't y x');
 elements['checkpoint-options'].children[0].click();
 assert.strictEqual(elements['checkpoint-options'].children[0].classList.contains('is-selected'), true);
@@ -626,7 +626,7 @@ elements['checkpoint-submit'].click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(elements['checkpoint-feedback'].hidden, false);
-assert.strictEqual(elements['checkpoint-feedback'].innerHTML, 'Todavía no: revisá <i>x</i>.');
+assert.strictEqual(elements['checkpoint-feedback'].innerHTML, 'Todavía no: revisá <span class="physics-var">x</span>.');
 assert.strictEqual(elements['checkpoint-feedback'].textContent.includes('*'), false);
 """,
             wrong_submission=True,
