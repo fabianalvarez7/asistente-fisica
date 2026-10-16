@@ -1,33 +1,20 @@
----
-title: Asistente de Física 1
-emoji: 🧲
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
+# FaradAI - Asistente de Física
 
-# Asistente de Física
-
-> Asistente Socrático de chat para estudiantes de **Física 1** (UNR). El asistente guía con preguntas; nunca resuelve el ejercicio. Las respuestas se generan exclusivamente desde los PDFs de la materia.
+> FaradAI es un asistente de chat para estudiantes de **Física 1** de la Facultad de Cs. Bioquímicas y Farmacéuticas de la Universidad Nacional de Rosario. El asistente guía al alumno con preguntas, para transmitir los conceptos teóricos y la resolución de ejercicios, pero nunca responde directamente. Las respuestas se generan exclusivamente desde la bibliografía de la materia, con el catálogo de los ejercicios que se dan durante el cursado, resueltos con el procedimiento determinado por los profesores.
 
 ## Stack
 
 | Capa | Tech |
 |---|---|
-| Backend | FastAPI (semana 3-4) |
+| Backend | Python y FastAPI |
 | RAG | LangChain como toolbox + orquestación propia en `rag/` |
 | Vector store | ChromaDB (persistente, local) |
-| PDF loader | pymupdf4llm (rápido, suficiente para el cuadernillo) |
+| PDF loader | pymupdf4llm |
 | Embeddings | `intfloat/multilingual-e5-small` (local, MPS/CUDA/CPU) |
 | LLM | Groq (API) |
-| Persistencia | SQLite (semana 5-6) |
-| Frontend chat | HTML + JS plano (semana 3-4) |
-| Frontend dashboard | Streamlit (mes 3, opcional) |
-| Deploy | Hugging Face Spaces Docker (free cpu-basic) |
-
-Decisiones de arquitectura y no-negociables del proyecto: ver `AGENTS.md`.
+| Persistencia | SQLite |
+| Frontend chat | HTML + JS plano |
+| Deploy | Hugging Face Spaces |
 
 ## Prerrequisitos
 
@@ -68,37 +55,22 @@ python scripts/indexar_pdfs.py
 
 ```
 asistente-fisica/
-├── app/                 # FastAPI backend (semana 3-4)
-├── dashboard/           # Streamlit (mes 3, opcional)
+├── app/                 # FastAPI backend
 ├── rag/                 # Lógica de RAG
 │   ├── loaders/         # PDF → Markdown (pymupdf4llm)
 │   ├── splitters/       # Chunking (RecursiveCharacterTextSplitter)
 │   ├── retrievers/      # Embeddings + ChromaDB
-│   ├── prompts/         # System prompts (mes 2)
-│   └── chain.py         # Orquestación RAG (mes 2)
+│   ├── prompts/         # System prompts
+│   └── chain.py         # Orquestación RAG
 ├── scripts/             # CLI: indexar_pdfs.py, query.py
 ├── data/                # ChromaDB + SQLite (gitignored)
 ├── tests/
 ├── docs/
-│   ├── STARTING.md      # Playbook semana 1-2
+│   ├── STARTING.md      # Playbook
 │   ├── STATUS.md        # Estado del proyecto
 │   ├── gotchas.md       # Problemas conocidos y workarounds
 │   └── adr/             # Architecture Decision Records
 └── AGENTS.md            # Constitución del proyecto
 ```
 
-## Estado actual
-
-Cerramos la **semana 1-2** del roadmap. El pipeline RAG funciona end-to-end sobre el cuadernillo (Teoría de Errores). Ver `docs/STATUS.md` para detalle.
-
-## Documentación
-
-- **`AGENTS.md`** — Constitución del proyecto (leer primero)
-- **`docs/STARTING.md`** — Playbook día-por-día de la semana 1-2
-- **`docs/STATUS.md`** — Dónde estamos, qué falta
-- **`docs/gotchas.md`** — Problemas conocidos y workarounds
-- **`docs/adr/`** — Decisiones arquitectónicas con justificación
-
-## Licencia
-
-MIT (a confirmar con Nair/Fabián).
+## Licencia MIT.
