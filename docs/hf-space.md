@@ -125,6 +125,29 @@ grep -q '\.bin filter=lfs' /tmp/asistente-fisica-space/.gitattributes || cat > /
 *.pickle filter=lfs diff=lfs merge=lfs -text
 EOF
 
+# 3.5. Restaurar el front-matter YAML de HF Spaces en el README.md del Space.
+#    ⚠️ El README.md del Space lleva front-matter YAML (sdk, app_port, emoji,
+#       colorFrom/colorTo) que HF lee para configurar el Space. El README del
+#       source NO debe tener ese front-matter (es human-facing), así que el
+#       rsync lo borra cuando copia del source al Space y el push deja el
+#       Space en `CONFIG_ERROR: Missing configuration in README`.
+#    Workaround: re-escribir el front-matter en el README del Space después
+#       del rsync y antes del commit. Plantilla actual:
+cat > /tmp/asistente-fisica-space/README.md <<'EOF'
+---
+title: Asistente de Física 1
+emoji: 🧲
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+EOF
+cat /Users/fabianalvarez/Documents/TUIA/asistente-fisica/README.md >> /tmp/asistente-fisica-space/README.md
+#    (Si el front-matter cambia entre deploys, este heredoc hay que actualizarlo
+#    en sincronía con el runbook.)
+
 # 4. Forzar que los binarios del bake pasen por el filtro LFS al commitear.
 #    Sin esto, los blobs quedan como git regular y el push falla con
 #    "Your push was rejected because it contains binary files".
@@ -289,6 +312,20 @@ chromadb.errors.InternalError: error returned from database: (code: 26) file is 
 - El rsync ya tiene `--exclude='.gitattributes'` (ver paso 2 del workflow arriba), así que el archivo del Space sobrevive.
 - Después del rsync, el script fuerza las reglas LFS al `.gitattributes` del Space (paso 3).
 - Verificar el deploy: `curl -s https://huggingface.co/api/spaces/<owner>/<name>/runtime` devuelve `{"stage":"RUNNING",...}`. Si devuelve `RUNTIME_ERROR` con un traceback, ver gotcha #3.
+
+### 4. El rsync borra el front-matter YAML de HF Spaces del README.md → CONFIG_ERROR
+
+**Síntoma:** el `git push` se acepta, pero la API del Space devuelve:
+
+```json
+{"stage":"CONFIG_ERROR", "errorMessage":"Missing configuration in README"}
+```
+
+El build nunca empieza. La UI muestra "Error" en el badge del Space.
+
+**Causa:** el README.md del Space lleva front-matter YAML (`sdk: docker`, `app_port: 7860`, `title`, `emoji`, `colorFrom/colorTo`, `pinned`) que HF lee para configurar el Space. El README del source NO debe tener ese front-matter (es human-facing y se muestra en GitHub), así que el rsync pisó el README del Space con el del source, perdiendo la configuración.
+
+**Workaround:** el paso 3.5 del workflow arriba (recién agregado, octubre 2026) restaura el front-matter en el README del Space justo después del rsync, antes del commit. Si ese paso falta, hay que hacer un commit de hotfix en el Space para re-añadir el front-matter directamente (es un fix de una línea, no toca el source).
 
 ### Bonus: clone inicial del Space con skip-smudge
 
