@@ -262,6 +262,12 @@ class CuratedExerciseEndpointTests(unittest.TestCase):
             patch.object(main, "get_or_create_student", return_value=7),
             patch.object(main, "save_message") as save_message,
             patch.object(main, "get_history", return_value=[]) as get_history,
+            # /history with exercise_id reads progress to decide whether the
+            # canonical completed review should be returned (see app/main.py:
+            # the read_exercise_progress branch). Mock it here so the test
+            # does not hit the real exercise_progress table, which init_db
+            # never created because we patch it at module import above.
+            patch.object(main, "get_exercise_progress", return_value=0),
         ):
             response = self.client.get(
                 "/history",

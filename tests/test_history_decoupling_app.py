@@ -80,48 +80,14 @@ def _fake_turso_environment():
                 sys.path[:] = original_sys_path
 
 
-def _record_fake_turso_event(event):
-    path = os.environ["FAKE_TURSO_EVENTS_PATH"]
-    with open(path, "a+", encoding="utf-8") as events:
-        events.write(event + "\n")
-        events.flush()
-        events.seek(0)
-        return len(events.readlines())
-
-
-def _fake_turso_init_db():
-    _record_fake_turso_event("init")
-
-
-def _fake_turso_health_check():
-    _record_fake_turso_event("health")
-    if os.getenv("FAKE_TURSO_MODE") == "hang":
-        while True:
-            time.sleep(0.01)
-
-
-def _fake_turso_get_or_create_student(name):
-    _record_fake_turso_event(f"student:{name}")
-    return 1
-
-
-def _fake_turso_get_history(student_id, limit=None, exercise_id=None):
-    del student_id, limit, exercise_id
-    _record_fake_turso_event("history")
-    return []
-
-
-def _fake_turso_get_exercise_progress(student_id, exercise_id):
-    del student_id, exercise_id
-    _record_fake_turso_event("exercise-progress")
-    return 0
-
-
-def _fake_turso_save_message(student_id, role, content, exercise_id=None):
-    del student_id
-    scope = exercise_id or "theory"
-    event_number = _record_fake_turso_event(f"save:{role}:{content}:{scope}")
-    return event_number
+from tests._fake_turso import (
+    fake_turso_init_db as _fake_turso_init_db,
+    fake_turso_health_check as _fake_turso_health_check,
+    fake_turso_get_or_create_student as _fake_turso_get_or_create_student,
+    fake_turso_get_history as _fake_turso_get_history,
+    fake_turso_get_exercise_progress as _fake_turso_get_exercise_progress,
+    fake_turso_save_message as _fake_turso_save_message,
+)
 
 
 class RemoteHistoryApplicationIntegrationTests(unittest.TestCase):
@@ -161,7 +127,11 @@ class RemoteHistoryApplicationIntegrationTests(unittest.TestCase):
     def test_chat_queues_remote_writes_with_history_callable(self):
         with _fake_turso_environment() as events_path:
             with (
-                patch.object(main, "HISTORY_TIMEOUT_SECONDS", 2),
+                # 5s (default) gives each spawned child enough room to run
+                # the fake before the cumulative chat deadline runs out.
+                # 2s is too tight on CI runners where spawn overhead exceeds
+                # the per-call budget.
+                patch.object(main, "HISTORY_TIMEOUT_SECONDS", 5),
                 patch.object(main, "init_db", _fake_turso_init_db),
                 patch.object(
                     main, "get_or_create_student", _fake_turso_get_or_create_student
@@ -194,7 +164,10 @@ class RemoteHistoryApplicationIntegrationTests(unittest.TestCase):
         exercise_id = "cinematica-1d-ejercicio-02"
         with _fake_turso_environment() as events_path:
             with (
-                patch.object(main, "HISTORY_TIMEOUT_SECONDS", 2),
+                # 5s (default) lets the extra get_exercise_progress spawn
+                # fit inside the cumulative chat deadline alongside the
+                # other awaited history calls.
+                patch.object(main, "HISTORY_TIMEOUT_SECONDS", 5),
                 patch.object(main, "init_db", _fake_turso_init_db),
                 patch.object(
                     main, "get_or_create_student", _fake_turso_get_or_create_student
