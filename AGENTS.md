@@ -52,15 +52,14 @@ These are not preferences. They are the project's hard boundaries.
 | Persistence | **SQLite** | File-based, zero setup, easy to migrate to Postgres if the prototype grows. |
 | PDF → Markdown | **pymupdf4llm** (start), with `marker-pdf` or **Mathpix** as plan B if formulas/images are lost | pymupdf4llm is the lightest starting point. Mathpix has a 1000-page/month free tier. |
 | Frontend (chat) | **Plain HTML + CSS + JS** served by FastAPI | One page. No React, no SPA. Fetch to `/chat` endpoint. |
-| Frontend (dashboard) | **Plain HTML + CSS + JS served by FastAPI** | Public read-only aggregate dashboard with no conversational state. Streamlit remains as a fallback/reference implementation. |
+| Frontend (dashboard) | **Plain HTML + CSS + JS served by FastAPI** | Public read-only aggregate dashboard with no conversational state. Streamlit fallback was removed (§7 decision #15). |
 | Deploy | **Hugging Face Spaces Docker** (free cpu-basic) | 16 GB RAM, supports Docker, ~48 h sleep. Replaces Render after OOM at 967 MB. |
 
 ## 5. Repository Structure
 
 ```
 asistente-fisica/
-├── app/                 # FastAPI backend (chat endpoints, API for dashboard)
-├── dashboard/           # Streamlit app for professors
+├── app/                 # FastAPI backend (chat endpoints, API for dashboard, dashboard queries)
 ├── rag/                 # RAG logic: loaders, splitters, retrievers, prompts
 │   ├── loaders/         # PDF → Markdown
 │   ├── splitters/       # Chunking strategies
@@ -83,7 +82,7 @@ asistente-fisica/
 
 > `rag/index/hf-model/` is **not** in the repo. The Dockerfile downloads the embedding model (`intfloat/multilingual-e5-small`, 448 MB) at build time using `scripts/preparar_indice_hf.py` — GitHub LFS free tier caps per-file uploads at 100 MB, so tracking the model in git is not viable. Local devs run the same script (or just the app once) to populate the dir; it is gitignored.
 
-**Rule:** business logic lives in `rag/`. FastAPI and Streamlit are thin transport layers. They do not contain retrieval or prompt logic. This separation is what allows us to swap pieces without rewriting endpoints.
+**Rule:** business logic lives in `rag/` and `app/queries.py`. FastAPI is a thin transport layer; it does not contain retrieval, prompt, or aggregation logic. This separation is what allows us to swap pieces without rewriting endpoints.
 
 ## 6. Setup Local (macOS / Windows)
 
@@ -111,8 +110,6 @@ python scripts/indexar_pdfs.py
 uvicorn app.main:app --reload
 
 # 7. Open the public professor dashboard at http://localhost:8000/dashboard
-# Optional fallback/reference dashboard (separate terminal):
-streamlit run dashboard/app.py
 ```
 
 **Notes for the developer:**
@@ -126,7 +123,7 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 1. **RAG first, Socratic layer later.** They are separate concerns. Mixing them makes the prompt and the retriever both harder to debug. Month 3 is dedicated to the Socratic layer.
 
-2. **Two UI surfaces, not one.** The chat and the public read-only dashboard are plain HTML/CSS/JS served by FastAPI so they share one deployable web app. The legacy Streamlit dashboard remains available as a fallback/reference, but the public dashboard does not depend on Streamlit.
+2. **Two UI surfaces, not one.** The chat and the public read-only dashboard are plain HTML/CSS/JS served by FastAPI so they share one deployable web app. The Streamlit fallback was removed on 2026-10-17 (decision #15); the public dashboard is the only dashboard surface and it does not depend on Streamlit.
 
 3. **Local embeddings, not an embedding API.** sentence-transformers is free, offline, and respects the "no network dependency" rule for embeddings. We could switch to an API later if quality demands it, but we are not starting there.
 
@@ -152,6 +149,8 @@ Each decision here was made consciously. Do not revert them without a written AD
 
 14. **Chat/persistence decoupling (timeout-bounded reads, ordered fire-and-forget writes).** Every awaited history persistence call is bounded by `HISTORY_TIMEOUT_SECONDS` (default 5 seconds; invalid or non-positive values fall back to the default). When Turso is configured, synchronous libSQL calls run in a child process that is terminated on timeout; the local SQLite fallback retains the lighter thread boundary for development. Chat writes are enqueued without blocking on Turso in a bounded single-worker FIFO queue capped at 1,000 items. Availability failures retry in place up to five attempts with exponential backoff of 1, 2, 4, and 8 seconds (capped at 30 seconds); overflow, retry exhaustion, shutdown, and terminal timeouts are dropped and logged. Timeouts are not retried because a driver call may have completed before termination and duplicate an insert. Healthy accepted messages are durable after queue drain; during an outage, queued writes are best-effort only for the current process and may be dropped. The amber degraded banner discloses that contract. Programming defects detected during enqueue still propagate, while worker-side defects are logged at `ERROR` with `history_write_defect` rather than being silently classified as degradation. See `docs/adr/0002-history-decoupling.md`.
 
+    15. **Streamlit dashboard removed on 2026-10-17.** The `dashboard/` package (Streamlit entrypoint, Dockerfile, README) was deleted; the read-only aggregation layer (`dashboard/queries.py`) moved to `app/queries.py`. The public dashboard is now solely the HTML/CSS/JS panel served by FastAPI at `/dashboard`, sharing the same deployable web app as the chat. The `.devcontainer` now boots FastAPI on port 8000 instead of Streamlit on 8501, and `streamlit` is no longer in `requirements.txt`. We keep the no-cloned-code rule intact and never bring Streamlit back unless a new ADR reverses this decision.
+
 ## 8. Roadmap (indicative, not a contract)
 
 **Timeline context:** the project has 4 months total, but Fabián has ~3 months of dedicated dev time (~12 weeks) before returning to other project tasks. The roadmap below fits in that window. Items that do not fit ship later or are cut. The exact week-by-week schedule will be re-anchored once Fabián has Nair's full delivery calendar.
@@ -166,11 +165,11 @@ Each decision here was made consciously. Do not revert them without a written AD
 | **3-4** | FastAPI chat endpoint + plain HTML frontend, basic RAG-only chat (no Socratic layer yet). **First deploy to HF Spaces (dev environment).** | **Yes.** Informal demo: she can open a URL and chat. |
 | **5-6** | Socratic layer (system prompt + few-shot examples). Iterate with Nair's feedback. Student history in SQLite. Basic identification (name or simple login). | **Yes.** Behaviour is the pedagogical differentiator. |
 | **7-8** | Polish, prompt iteration, auth hardening if time allows. Second Nair demo. | **Yes.** |
-| **9-10** | Optional: Streamlit dashboard for professors. **Cut if it threatens the Socratic layer.** | Maybe. |
+| **9-10** | Public read-only professor dashboard served by FastAPI (HTML/CSS/JS, see decision #15). | Maybe. |
 | **11-12** | Final deploy, polish, final demo with Nair and the project team. | **Yes.** Full prototype. |
 
 **Optional / cut candidates (revisit at week 6 and week 9):**
-- Streamlit dashboard for professors — nice-to-have, not critical. **First candidate to cut** if the Socratic chat needs more time.
+- Streamlit dashboard for professors — finished in week 11-12 as a read-only FastAPI dashboard; the Streamlit fallback was removed on 2026-10-17 (decision #15).
 - Robust authentication (user/pass with hash, sessions). Minimum viable identification may be enough.
 - Multiple user roles with distinct UIs.
 - Re-ranking, hybrid search, advanced retrieval strategies. Basic vector search first.
@@ -195,7 +194,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 - **Do not clone a third-party RAG repo and pray.** Every line in `rag/` is written and understood.
 - **Do not make the assistant solve the exercise directly.** The Socratic layer is the point. The system prompt enforces this; do not weaken it.
 - **Do not hardcode API keys, paths, or model names.** Everything that varies between environments goes in `.env` (template in `.env.example`).
-- **Do not put RAG logic inside FastAPI or Streamlit handlers.** It belongs in `rag/`. The transport layers are thin.
+- **Do not put RAG logic inside FastAPI handlers.** It belongs in `rag/` and in `app/queries.py` for aggregation. The transport layer is thin.
 - **Do not assume the production environment matches the dev environment.** HF Spaces runs a Linux Docker container, the dev may be macOS or Windows. Test in the closest-to-prod setup you can.
 - **Do not use LangChain's high-level abstractions** (Agents, Memory, RetrievalQA with built-in prompts) without reading what they do. We use LangChain as a toolbox, not as a black box.
 - **Do not introduce Docker, Kubernetes, or any container orchestration** for the prototype. The single `Dockerfile` we have is a deploy artifact for HF Spaces (§7.11), not a dev tool. Do not add docker-compose, multi-stage builds, orchestration, or "containerize the dev workflow" proposals.
@@ -208,8 +207,7 @@ These are anti-patterns specific to this project. Violating them is a sign that 
 |---|---|
 | `python scripts/indexar_pdfs.py` | Reads PDFs from `data/pdfs/`, chunks, embeds, and writes to ChromaDB (dev/local). |
 | `python scripts/preparar_indice_hf.py` | Re-bakes `rag/index/chroma/` and re-validates the embedding model snapshot at `rag/index/hf-model/`. Run after a corpus change, before pushing a new deploy. |
-| `uvicorn app.main:app --reload` | Runs the chat backend in dev mode. |
-| `streamlit run dashboard/app.py` | Runs the professor dashboard. |
+| `uvicorn app.main:app --reload` | Runs the chat backend + the public dashboard in dev mode. |
 | `pytest` | Runs tests (when they exist). |
 | `pip freeze > requirements.txt` | Refresh dependencies after a `pip install`. |
 
@@ -250,7 +248,7 @@ These are the questions we have not yet answered. Some of them are blocking for 
 ## 14. What "Done" Means for This Project
 
 A feature is done when:
-1. The code is in `rag/`, `app/`, `dashboard/`, or `scripts/` — not in a notebook.
+1. The code is in `rag/`, `app/`, or `scripts/` — not in a notebook.
 2. The README / docstring explains what it does and how to use it.
 3. If it touches the prompt, the prompt is documented in `docs/` with a before/after example.
 4. If it touches the architecture, an ADR is written in `docs/`.

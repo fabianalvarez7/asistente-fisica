@@ -48,9 +48,6 @@ Thumbs.db
 *.ipynb
 .ipynb_checkpoints/
 
-# Streamlit / Jupyter
-.streamlit/secrets.toml
-
 # Git internals
 .git/
 .gitignore

@@ -31,7 +31,7 @@ from rag.topics import _TOPICS, load_topics  # noqa: E402
 with patch.object(history_module, "init_db"):
     from app.main import app  # noqa: E402
 
-from dashboard.queries import get_topic_counts  # noqa: E402
+from app.queries import get_topic_counts  # noqa: E402
 
 
 class TopicDataTests(unittest.TestCase):
@@ -110,7 +110,7 @@ class DashboardBackwardCompatTests(unittest.TestCase):
     def test_get_topic_counts_shape_unchanged(self):
         fake_conn = MagicMock()
         fake_conn.execute.return_value.fetchall.return_value = []
-        with patch("dashboard.queries._get_connection", return_value=fake_conn):
+        with patch("app.queries._get_connection", return_value=fake_conn):
             counts = get_topic_counts()
 
         self.assertEqual(len(counts), len(_TOPICS))

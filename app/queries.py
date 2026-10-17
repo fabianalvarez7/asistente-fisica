@@ -1,8 +1,8 @@
 """Pure aggregation queries for the professor dashboard.
 
 This module is UI-agnostic: it only reads from the history database and
-returns plain Python dicts/lists. Streamlit-specific code lives in
-``dashboard/app.py``.
+returns plain Python dicts/lists. The public dashboard renders these
+results as plain HTML/CSS/JS served by FastAPI.
 
 All aggregates are anonymous: no ``student_id`` or ``display_name`` is
 included in the returned data. Queries are grouped by exact ``content`` to
@@ -17,13 +17,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-# Streamlit runs ``streamlit run dashboard/app.py`` with cwd set to the
-# script's directory (i.e. ``dashboard/``), so a plain ``from rag.history
-# import ...`` fails because ``rag/`` is a sibling of ``dashboard/`` rather
-# than a child. Adding the repo root to ``sys.path`` here lets the module
-# resolve sibling packages whether it's imported as ``dashboard.queries``
-# (from the chat app or from tests) or as ``queries`` (from the Streamlit
-# entrypoint). Idempotent — safe to call twice.
+# ``rag/`` is a sibling of ``app/`` rather than a child, so add the repo
+# root to ``sys.path`` so ``from rag.history import ...`` resolves whether
+# this module is imported as ``app.queries`` (from FastAPI or tests) or
+# as ``queries`` (from a script invoked with cwd elsewhere). Idempotent.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))

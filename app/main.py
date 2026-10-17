@@ -29,7 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from dashboard.queries import get_kpis, get_topic_counts
+from app.queries import get_kpis, get_topic_counts
 
 from rag.history import (
     HistoryUnavailableError,

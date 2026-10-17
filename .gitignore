@@ -86,9 +86,6 @@ desktop.ini
 .ipynb_checkpoints/
 *.ipynb
 
-# Streamlit
-.streamlit/secrets.toml
-
 # OpenCode / orchestrator local caches
 .atl/
 .Rhistory
