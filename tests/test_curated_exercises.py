@@ -51,7 +51,7 @@ class CuratedExerciseEndpointTests(unittest.TestCase):
         self.assertNotIn("constant-acceleration", response.text)
         self.assertNotIn("correct_option_ids", response.text)
         for future_answer in (
-            "x(10)=120 m",
+            "x(10)=130 m",
             "x(20)=360 m",
             "aceleración constante",
         ):
@@ -349,7 +349,7 @@ class CuratedExerciseGenerationTests(unittest.TestCase):
         prompt_beyond_statement = prompt.replace(plain_text(exercise.statement), "")
         starter_ideas = "\n".join(exercise.starter_ideas)
         for future_answer in (
-            "x(10)=120 m",
+            "x(10)=130 m",
             "x(20)=360 m",
             "aceleración constante",
         ):

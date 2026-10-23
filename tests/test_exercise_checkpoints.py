@@ -53,7 +53,7 @@ class CheckpointDomainTests(unittest.TestCase):
                 "initial-position-zero",
                 "initial-velocity-positive",
                 "initial-velocity-negative",
-                "initial-position-120",
+                "initial-position-130",
             ],
         )
         self.assertNotIn("constant-acceleration", str(progress))
@@ -163,7 +163,7 @@ class CheckpointApiTests(unittest.TestCase):
                 json={
                     "student_name": "Ana",
                     "checkpoint_id": "initial-conditions",
-                    "answer_ids": ["initial-position-120"],
+                    "answer_ids": ["initial-position-130"],
                 },
             )
 
@@ -337,7 +337,7 @@ class CheckpointApiTests(unittest.TestCase):
         progress = serialize_progress(exercise, 0)
 
         self.assertNotIn("completed_review", progress)
-        self.assertNotIn("x(10)=120 m", str(progress))
+        self.assertNotIn("x(10)=130 m", str(progress))
 
     def test_completed_progress_contains_checkpoint_questions_and_correct_answers(self):
         exercise = get_exercise(EXERCISE_ID)
@@ -652,8 +652,8 @@ class CheckpointPersistenceIntegrationTests(unittest.TestCase):
                 self.assertEqual(scoped_history[1]["role"], "assistant")
                 self.assertIn("Respuesta:", scoped_history[0]["content"])
                 self.assertIn(
-                    "Respuesta: 120 = 10v₀ + 50a, 360 = 20v₀ + 200a, "
-                    "Al resolver: v₀ = 6 m/s y a = 1,2 m/s²",
+                    "Respuesta: 130 = 10v₀ + 50a, 360 = 20v₀ + 200a, "
+                    "Al resolver: v₀ = 8 m/s y a = 1 m/s²",
                     [message["content"] for message in scoped_history],
                 )
 
@@ -694,7 +694,7 @@ assert.strictEqual(
     assert.ok(
       elements['exercise-review-list'].children.some(
         (item) => item.children[2].children.some(
-          (answer) => answer.innerHTML.includes('<span class="physics-var">x</span>(10)=120 m'),
+          (answer) => answer.innerHTML.includes('<span class="physics-var">x</span>(10)=130 m'),
         ),
       ),
     );

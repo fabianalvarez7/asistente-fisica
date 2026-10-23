@@ -101,7 +101,7 @@ class Exercise:
 
 _V_GRAPH_CORRECT = GraphDescriptor(
     kind="polyline",
-    points=((0, 6), (20, 30)),
+    points=((0, 8), (20, 28)),
     x_min=0,
     x_max=20,
     y_min=0,
@@ -109,9 +109,10 @@ _V_GRAPH_CORRECT = GraphDescriptor(
     x_label="t (s)",
     y_label="v (m/s)",
 )
+# Distractor: assumes the average velocity 18 m/s (v(10)) stays constant.
 _V_GRAPH_HORIZONTAL = GraphDescriptor(
     kind="polyline",
-    points=((0, 16), (20, 16)),
+    points=((0, 18), (20, 18)),
     x_min=0,
     x_max=20,
     y_min=0,
@@ -119,9 +120,10 @@ _V_GRAPH_HORIZONTAL = GraphDescriptor(
     x_label="t (s)",
     y_label="v (m/s)",
 )
+# Distractor: mixes up the axes, plotting the position values in v(t).
 _V_GRAPH_DECREASING = GraphDescriptor(
     kind="polyline",
-    points=((0, 30), (20, 6)),
+    points=((0, 28), (20, 8)),
     x_min=0,
     x_max=20,
     y_min=0,
@@ -129,9 +131,10 @@ _V_GRAPH_DECREASING = GraphDescriptor(
     x_label="t (s)",
     y_label="v (m/s)",
 )
+# Distractor: guesses a non-uniform velocity instead of a constant acceleration.
 _V_GRAPH_CURVE = GraphDescriptor(
     kind="curve",
-    points=((0, 6), (5, 14), (10, 8), (15, 24), (20, 12)),
+    points=((0, 8), (5, 16), (10, 20), (15, 24), (20, 28)),
     x_min=0,
     x_max=20,
     y_min=0,
@@ -181,12 +184,12 @@ EXERCISES: tuple[Exercise, ...] = (
             GuidanceStep(
                 id="determine-initial-values",
                 question=(
-                    "Usando x(10)=120 m y x(20)=360 m, ¿qué relaciones y valores "
+                    "Usando x(10)=130 m y x(20)=360 m, ¿qué relaciones y valores "
                     "sirven para determinar v₀ y a?"
                 ),
                 expected_idea=(
-                    "120 = 10v₀ + 50a y 360 = 20v₀ + 200a; al resolver, "
-                    "v₀ = 6 m/s y a = 1,2 m/s²."
+                    "130 = 10v₀ + 50a y 360 = 20v₀ + 200a; al resolver, "
+                    "v₀ = 8 m/s y a = 1 m/s²."
                 ),
                 hint="Reemplazá cada tiempo en la ecuación general y luego resolvé el sistema.",
             ),
@@ -196,13 +199,13 @@ EXERCISES: tuple[Exercise, ...] = (
                     "Primero dibujá v(t) en el cuadernillo. Después, elegí el gráfico "
                     "que mejor representa tu dibujo."
                 ),
-                expected_idea="v(t) es una recta creciente que empieza en 6 m/s.",
+                expected_idea="v(t) es una recta creciente que empieza en 8 m/s.",
                 hint="La velocidad inicial es v₀ y la pendiente de la recta es a.",
             ),
             GuidanceStep(
                 id="evaluate-requested-times",
                 question="¿Qué valores se obtienen al evaluar las magnitudes en los tiempos pedidos?",
-                expected_idea="x(10)=120 m, x(20)=360 m, v(10)=18 m/s y v(20)=30 m/s.",
+                expected_idea="x(10)=130 m, x(20)=360 m, v(10)=18 m/s y v(20)=28 m/s.",
                 hint="Sustituí t=10 y t=20 en x(t) y v(t).",
             ),
         ),
@@ -215,7 +218,7 @@ EXERCISES: tuple[Exercise, ...] = (
                     CheckpointOption("initial-position-zero", "*x₀* = 0 m"),
                     CheckpointOption("initial-velocity-positive", "La velocidad inicial es positiva"),
                     CheckpointOption("initial-velocity-negative", "La velocidad inicial es negativa"),
-                    CheckpointOption("initial-position-120", "*x₀* = 120 m"),
+                    CheckpointOption("initial-position-130", "*x₀* = 130 m"),
                 ),
                 correct_option_ids=("initial-position-zero", "initial-velocity-positive"),
                 hint="Observá dónde empieza la curva y hacia dónde crece al inicio.",
@@ -224,19 +227,19 @@ EXERCISES: tuple[Exercise, ...] = (
             ),
             Checkpoint(
                 id="determine-initial-values",
-                prompt="Usando *x*(10)=120 m y *x*(20)=360 m, ¿qué relaciones y valores sirven para determinar *v₀* y *a*?",
+                prompt="Usando *x*(10)=130 m y *x*(20)=360 m, ¿qué relaciones y valores sirven para determinar *v₀* y *a*?",
                 input_type="multi_select",
                 options=(
-                    CheckpointOption("equation-at-10", "120 = 10*v₀* + 50*a*"),
+                    CheckpointOption("equation-at-10", "130 = 10*v₀* + 50*a*"),
                     CheckpointOption("equation-at-20", "360 = 20*v₀* + 200*a*"),
-                    CheckpointOption("solution-v0-a", "Al resolver: *v₀* = 6 m/s y *a* = 1,2 m/s²"),
-                    CheckpointOption("equation-at-10-wrong", "120 = 10*v₀* + 10*a*"),
-                    CheckpointOption("solution-negative", "*v₀* = -6 m/s y *a* = -1,2 m/s²"),
+                    CheckpointOption("solution-v0-a", "Al resolver: *v₀* = 8 m/s y *a* = 1 m/s²"),
+                    CheckpointOption("equation-at-10-wrong", "130 = 10*v₀* + 10*a*"),
+                    CheckpointOption("solution-swap-roles", "Al resolver: *v₀* = 1 m/s y *a* = 8 m/s²"),
                 ),
                 correct_option_ids=("equation-at-10", "equation-at-20", "solution-v0-a"),
                 hint="Reemplazá cada tiempo en la ecuación general y luego resolvé el sistema.",
                 help_hint="Las dos ecuaciones correctas salen de sustituir *t*=10 y *t*=20; ambas llevan al mismo par *v₀*,*a*.",
-                explanation="Los puntos del gráfico forman un sistema que determina *v₀* = 6 m/s y *a* = 1,2 m/s².",
+                explanation="Los puntos del gráfico forman un sistema que determina *v₀* = 8 m/s y *a* = 1 m/s².",
             ),
             Checkpoint(
                 id="velocity-graph-shape",
@@ -252,9 +255,9 @@ EXERCISES: tuple[Exercise, ...] = (
                     CheckpointOption("velocity-graph-curve", "Gráfico D", _V_GRAPH_CURVE),
                 ),
                 correct_option_ids=("velocity-graph-correct",),
-                hint="Buscá una recta que empiece en 6 m/s y aumente con el tiempo.",
-                help_hint="La velocidad inicial es 6 m/s y la aceleración positiva hace que la recta suba.",
-                explanation="El gráfico correcto es una recta creciente que comienza en 6 m/s.",
+                hint="Buscá una recta que empiece en 8 m/s y aumente con el tiempo.",
+                help_hint="La velocidad inicial es 8 m/s y la aceleración positiva hace que la recta suba.",
+                explanation="El gráfico correcto es una recta creciente que comienza en 8 m/s.",
                 part="b",
                 presentation="graph",
             ),
@@ -263,31 +266,31 @@ EXERCISES: tuple[Exercise, ...] = (
                 prompt="¿Qué valores se obtienen al evaluar las magnitudes en los tiempos pedidos?",
                 input_type="multi_select",
                 options=(
-                    CheckpointOption("position-at-10", "*x*(10)=120 m"),
+                    CheckpointOption("position-at-10", "*x*(10)=130 m"),
                     CheckpointOption("position-at-20", "*x*(20)=360 m"),
                     CheckpointOption("velocity-at-10", "*v*(10)=18 m/s"),
-                    CheckpointOption("velocity-at-20", "*v*(20)=30 m/s"),
-                    CheckpointOption("velocity-at-10-wrong", "*v*(10)=12 m/s"),
+                    CheckpointOption("velocity-at-20", "*v*(20)=28 m/s"),
+                    CheckpointOption("velocity-at-10-wrong", "*v*(10)=8 m/s"),
                 ),
                 correct_option_ids=("position-at-10", "position-at-20", "velocity-at-10", "velocity-at-20"),
                 hint="Sustituí *t*=10 y *t*=20 en *x*(*t*) y *v*(*t*).",
-                help_hint="Los puntos *x*(10) y *x*(20) son los del gráfico; calculá *v* con *v*(*t*)=6+1,2*t*.",
-                explanation="Las evaluaciones recuperan los puntos conocidos y dan *v*(10)=18 m/s y *v*(20)=30 m/s.",
+                help_hint="Los puntos *x*(10) y *x*(20) son los del gráfico; calculá *v* con *v*(*t*)=8+*t*.",
+                explanation="Las evaluaciones recuperan los puntos conocidos y dan *v*(10)=18 m/s y *v*(20)=28 m/s.",
                 part="b",
             ),
         ),
         teacher_key=TeacherKey(
-            position_equation="x(t) = 6t + 0.6t²",
-            velocity_equation="v(t) = 6 + 1.2t",
-            acceleration_equation="a(t) = 1.2 m/s²",
+            position_equation="x(t) = 8t + 0.5t²",
+            velocity_equation="v(t) = 8 + t",
+            acceleration_equation="a(t) = 1 m/s²",
             initial_position="0 m",
-            initial_velocity="6 m/s",
-            acceleration="1.2 m/s²",
+            initial_velocity="8 m/s",
+            acceleration="1 m/s²",
             checkpoints=(
-                "x(10) = 120 m",
+                "x(10) = 130 m",
                 "x(20) = 360 m",
                 "v(10) = 18 m/s",
-                "v(20) = 30 m/s",
+                "v(20) = 28 m/s",
             ),
         ),
     ),
