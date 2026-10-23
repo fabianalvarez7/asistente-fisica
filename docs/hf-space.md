@@ -94,11 +94,17 @@ rm -rf /tmp/asistente-fisica-space
 git clone https://fabianalvarez7:${HF_TOKEN}@huggingface.co/spaces/fabianalvarez7/asistente-fisica-unr /tmp/asistente-fisica-space
 
 # 2. Sincronizar archivos del source al Space (con excludes para no inflar el deploy).
+#    ⚠️ `--exclude='.codegraph'` NO es cosmético. El índice de CodeGraph es un
+#    artefacto de indexación local (~megabytes de .sqlite3/.bin). El rsync lo
+#    copia al Space porque no está en el .gitignore del source, y una vez
+#    commiteado hay que sacarlo a mano del repo del Space. Agregado 2026-10-23
+#    tras detectarlo en el redeploy del fix del ejercicio 02.
 rsync -av --delete \
   --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
   --exclude='.DS_Store' --exclude='.git' \
   --exclude='.gitattributes' \
   --exclude='data/' --exclude='.pytest_cache' --exclude='.mypy_cache' \
+  --exclude='.codegraph' \
   --exclude='rag/index/hf-model' \
   --exclude='openspec/' \
   --exclude='docs/entrega-2/' \
